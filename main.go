@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	VERSION = "20200110"
+	VERSION = "20200114"
 )
 
 var (
