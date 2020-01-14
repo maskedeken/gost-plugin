@@ -105,19 +105,21 @@ func parseForwardChain(opts *Options) (*gost.Chain, error) {
 	}
 
 	var tr gost.Transporter
-	wsOpts := &gost.WSOptions{Path: opts.path}
+	wsOpts := &WSOptions{}
+	wsOpts.Path = opts.path
+	wsOpts.Fastopen = opts.fastopen
 	if !opts.nocomp {
 		wsOpts.EnableCompression = true
 	}
 	switch node.Transport {
 	case "ws":
-		tr = gost.WSTransporter(wsOpts)
+		tr = WSTransporter(wsOpts)
 	case "mws":
-		tr = gost.MWSTransporter(wsOpts)
+		tr = MWSTransporter(wsOpts)
 	case "wss":
-		tr = gost.WSSTransporter(wsOpts)
+		tr = WSSTransporter(wsOpts)
 	case "mwss":
-		tr = gost.MWSSTransporter(wsOpts)
+		tr = MWSSTransporter(wsOpts)
 	default:
 		return nil, newError("unsupported mode:", opts.mode)
 	}

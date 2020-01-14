@@ -42,6 +42,7 @@ func main() {
 	flags.BoolVar(&options.server, "server", false, "Run in server mode.")
 	flags.BoolVar(&options.tlsEnabled, "tls", false, "Enable TLS.")
 	flags.BoolVar(&options.nocomp, "nocomp", false, "Disable compression.")
+	flags.BoolVar(&options.fastopen, "fast-open", false, "Enable TCP Fast Open.")
 
 	flags.Parse(os.Args[1:])
 	if *version {
@@ -52,7 +53,6 @@ func main() {
 	err := parseOpts(options)
 	if err != nil {
 		log.Fatal(err.Error())
-		// Configuration error. Exit with a special value to prevent systemd from restarting.
 		os.Exit(23)
 	}
 

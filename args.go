@@ -20,6 +20,7 @@ type Options struct {
 	tlsEnabled bool
 	server     bool
 	nocomp     bool
+	fastopen   bool
 	cert       string
 	key        string
 }
@@ -84,6 +85,9 @@ func parseOpts(opts *Options) error {
 		}
 		if _, b := args.Get("nocomp"); b {
 			opts.nocomp = true
+		}
+		if _, b := args.Get("fast-open"); b {
+			opts.fastopen = true
 		}
 		if c, b := args.Get("host"); b {
 			opts.hostname = c
