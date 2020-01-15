@@ -21,7 +21,7 @@ On your client
 
 ```sh
 ss-local -c config.json -p 80 --plugin gost-plugin --plugin-opts "mode=ws"
-ss-local -c config.json -p 80 --plugin gost-plugin --plugin-opts "mode=mws"
+ss-local -c config.json -p 80 --plugin gost-plugin --plugin-opts "mode=mws;mux=1"
 ```
 
 ### Shadowsocks over Websocket/Multiplex Websocket (HTTPS)
@@ -37,6 +37,6 @@ On your client
 
 ```sh
 ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "tls;host=mydomain.me;mode=ws"
-ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "tls;host=mydomain.me;mode=mws"
+ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "tls;host=mydomain.me;mode=mws;mux=1"
 ```
 
