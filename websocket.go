@@ -130,35 +130,17 @@ func (tr *mwsTransporter) Dial(addr string, options ...gost.DialOption) (conn ne
 		}
 	}
 
-	muxConn := &muxConn{session.conn, session}
-	return muxConn, nil
-}
-
-func (tr *mwsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
-	opts := &gost.HandshakeOptions{}
-	for _, option := range options {
-		option(opts)
-	}
-
-	timeout := opts.Timeout
-	if timeout <= 0 {
-		timeout = gost.HandshakeTimeout
-	}
-
-	conn.SetDeadline(time.Now().Add(timeout))
-	defer conn.SetDeadline(time.Time{})
-
-	mConn := conn.(*muxConn)
-	cc, err := mConn.session.GetConn()
+	cc, err := session.GetConn()
 	if err != nil {
-		tr.Lock()
-		defer tr.Unlock()
-
-		mConn.session.Close()
-		tr.sessionManager.Remove(mConn.session)
+		session.Close()
+		tr.sessionManager.Remove(session)
 		return nil, err
 	}
 	return cc, nil
+}
+
+func (tr *mwsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
+	return conn, nil
 }
 
 func (tr *mwsTransporter) initSession(addr string, conn net.Conn, opts *gost.HandshakeOptions) (*muxSession, error) {
@@ -274,8 +256,13 @@ func (tr *mwssTransporter) Dial(addr string, options ...gost.DialOption) (conn n
 		}
 	}
 
-	muxConn := &muxConn{session.conn, session}
-	return muxConn, nil
+	cc, err := session.GetConn()
+	if err != nil {
+		session.Close()
+		tr.sessionManager.Remove(session)
+		return nil, err
+	}
+	return cc, nil
 }
 
 func (tr *mwssTransporter) initSession(addr string, conn net.Conn, opts *gost.HandshakeOptions) (*muxSession, error) {

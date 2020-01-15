@@ -105,8 +105,3 @@ func (sm *sessionManager) Size() int {
 func (sm *sessionManager) Next() {
 	sm.currentSession = (sm.currentSession + 1) % sm.maxSessions
 }
-
-type muxConn struct {
-	net.Conn
-	session *muxSession
-}
