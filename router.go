@@ -59,7 +59,7 @@ func configRouter(opts *Options) (*Router, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("tcp://%s:%d", opts.localAddr, opts.localPort)
+	url := fmt.Sprintf("tcp://%s:%d", fixAddr(opts.localAddr), opts.localPort)
 	node, err := gost.ParseNode(url)
 	if err != nil {
 		return nil, err
@@ -98,16 +98,21 @@ func parseForwardChain(opts *Options) (*gost.Chain, error) {
 		protocol = opts.mode
 	}
 
-	url := fmt.Sprintf("%s://%s:%d?path=%s", protocol, opts.remoteAddr, opts.remotePort, opts.path)
+	url := fmt.Sprintf("%s://%s:%d?path=%s", protocol, fixAddr(opts.remoteAddr), opts.remotePort, opts.path)
 	node, err := gost.ParseNode(url)
 	if err != nil {
 		return nil, err
 	}
 
 	var tr gost.Transporter
-	wsOpts := &WSOptions{}
+	wsOpts := &WSOptions{node: &node}
 	wsOpts.Path = opts.path
 	wsOpts.Fastopen = opts.fastopen
+	mux := uint16(opts.mux)
+	if mux < 1 {
+		mux = 1
+	}
+	wsOpts.muxSessions = mux
 	if !opts.nocomp {
 		wsOpts.EnableCompression = true
 	}
@@ -175,7 +180,7 @@ func configServer(opts *Options) (*Router, error) {
 		protocol = opts.mode
 	}
 
-	url := fmt.Sprintf("%s://%s:%d?path=%s", protocol, opts.localAddr, opts.localPort, opts.path)
+	url := fmt.Sprintf("%s://%s:%d?path=%s", protocol, fixAddr(opts.localAddr), opts.localPort, opts.path)
 	node, err := gost.ParseNode(url)
 	if err != nil {
 		return nil, err
@@ -231,7 +236,7 @@ func parseServerChain(opts *Options) (*gost.Chain, error) {
 		url = opts.remoteAddr
 		tr = UnixTransporter(opts.remoteAddr[7:])
 	} else {
-		url = fmt.Sprintf("tcp://%s:%d", opts.remoteAddr, opts.remotePort)
+		url = fmt.Sprintf("tcp://%s:%d", fixAddr(opts.remoteAddr), opts.remotePort)
 		tr = gost.TCPTransporter()
 	}
 
@@ -252,4 +257,17 @@ func parseServerChain(opts *Options) (*gost.Chain, error) {
 	chain.AddNode(node)
 
 	return chain, nil
+}
+
+func fixAddr(addr string) string {
+	size := len(addr)
+	if size == 0 {
+		return addr
+	}
+
+	if strings.Contains(addr, ":") && addr[0] != '[' && addr[size-1] != ']' {
+		return "[" + addr + "]"
+	}
+
+	return addr
 }

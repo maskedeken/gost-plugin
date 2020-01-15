@@ -24,6 +24,7 @@ func (c *muxStreamConn) Close() error {
 }
 
 type muxSession struct {
+	id      uint16
 	conn    net.Conn
 	session *smux.Session
 }
@@ -62,7 +63,50 @@ func (session *muxSession) NumStreams() int {
 	return session.session.NumStreams()
 }
 
-type muxSessions struct {
-	sessions    []*muxSession
-	maxSessions uint
+type sessionManager struct {
+	sessions       []*muxSession
+	maxSessions    uint16
+	currentSession uint16
+}
+
+func SessionManager(maxSessions uint16) *sessionManager {
+	return &sessionManager{maxSessions: maxSessions,
+		sessions: make([]*muxSession, maxSessions)}
+}
+
+func (sm *sessionManager) Get() *muxSession {
+	session := sm.sessions[sm.currentSession]
+	if session != nil {
+		sm.Next()
+	}
+	return session
+}
+
+func (sm *sessionManager) Create(conn net.Conn, session *smux.Session) *muxSession {
+	mSession := &muxSession{
+		id:      sm.currentSession,
+		conn:    conn,
+		session: session,
+	}
+
+	sm.sessions[sm.currentSession] = mSession
+	sm.Next()
+	return mSession
+}
+
+func (sm *sessionManager) Remove(session *muxSession) {
+	sm.sessions[session.id] = nil
+}
+
+func (sm *sessionManager) Size() int {
+	return len(sm.sessions)
+}
+
+func (sm *sessionManager) Next() {
+	sm.currentSession = (sm.currentSession + 1) % sm.maxSessions
+}
+
+type muxConn struct {
+	net.Conn
+	session *muxSession
 }

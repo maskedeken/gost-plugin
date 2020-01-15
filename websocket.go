@@ -20,18 +20,20 @@ const (
 
 type WSOptions struct {
 	gost.WSOptions
-	Fastopen bool
+	node        *gost.Node
+	Fastopen    bool
+	muxSessions uint16
 }
 
-type tcpTransporter struct {
+type wsTransporter struct {
 	options *WSOptions
 }
 
-func (tr *tcpTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
-	return conn, nil
+func WSTransporter(wsopts *WSOptions) gost.Transporter {
+	return &wsTransporter{options: wsopts}
 }
 
-func (tr *tcpTransporter) Dial(addr string, options ...gost.DialOption) (net.Conn, error) {
+func (tr *wsTransporter) Dial(addr string, options ...gost.DialOption) (net.Conn, error) {
 	opts := &gost.DialOptions{}
 	for _, option := range options {
 		option(opts)
@@ -49,17 +51,8 @@ func (tr *tcpTransporter) Dial(addr string, options ...gost.DialOption) (net.Con
 	return opts.Chain.Dial(addr)
 }
 
-func (tr *tcpTransporter) Multiplex() bool {
+func (tr *wsTransporter) Multiplex() bool {
 	return false
-}
-
-type wsTransporter struct {
-	tcpTransporter
-	options *WSOptions
-}
-
-func WSTransporter(wsopts *WSOptions) gost.Transporter {
-	return &wsTransporter{options: wsopts}
 }
 
 func (tr *wsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
@@ -81,15 +74,15 @@ func (tr *wsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOptio
 }
 
 type mwsTransporter struct {
-	options      *WSOptions
-	sessions     map[string]*muxSession
-	sessionMutex sync.Mutex
+	sync.Mutex
+	options        *WSOptions
+	sessionManager *sessionManager
 }
 
 func MWSTransporter(opts *WSOptions) gost.Transporter {
 	return &mwsTransporter{
-		options:  opts,
-		sessions: make(map[string]*muxSession),
+		options:        opts,
+		sessionManager: SessionManager(opts.muxSessions),
 	}
 }
 
@@ -99,15 +92,21 @@ func (tr *mwsTransporter) Dial(addr string, options ...gost.DialOption) (conn ne
 		option(opts)
 	}
 
-	tr.sessionMutex.Lock()
-	defer tr.sessionMutex.Unlock()
-
-	session, ok := tr.sessions[addr]
-	if session != nil && session.IsClosed() {
-		delete(tr.sessions, addr)
-		ok = false
+	node := tr.options.node
+	handshakeOpts := &gost.HandshakeOptions{}
+	for _, option := range node.HandshakeOptions {
+		option(handshakeOpts)
 	}
-	if !ok {
+
+	tr.Lock()
+	defer tr.Unlock()
+
+	session := tr.sessionManager.Get()
+	if session != nil && session.IsClosed() {
+		tr.sessionManager.Remove(session)
+		session = nil
+	}
+	if session == nil {
 		timeout := opts.Timeout
 		if timeout <= 0 {
 			timeout = gost.DialTimeout
@@ -123,10 +122,16 @@ func (tr *mwsTransporter) Dial(addr string, options ...gost.DialOption) (conn ne
 		if err != nil {
 			return
 		}
-		session = &muxSession{conn: conn}
-		tr.sessions[addr] = session
+
+		session, err = tr.initSession(node.Addr, conn, handshakeOpts)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
 	}
-	return session.conn, nil
+
+	muxConn := &muxConn{session.conn, session}
+	return muxConn, nil
 }
 
 func (tr *mwsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
@@ -140,28 +145,17 @@ func (tr *mwsTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOpti
 		timeout = gost.HandshakeTimeout
 	}
 
-	tr.sessionMutex.Lock()
-	defer tr.sessionMutex.Unlock()
-
 	conn.SetDeadline(time.Now().Add(timeout))
 	defer conn.SetDeadline(time.Time{})
 
-	session, ok := tr.sessions[opts.Addr]
-	if !ok || session.session == nil {
-		s, err := tr.initSession(opts.Addr, conn, opts)
-		if err != nil {
-			conn.Close()
-			delete(tr.sessions, opts.Addr)
-			return nil, err
-		}
-		session = s
-		tr.sessions[opts.Addr] = session
-	}
-
-	cc, err := session.GetConn()
+	mConn := conn.(*muxConn)
+	cc, err := mConn.session.GetConn()
 	if err != nil {
-		session.Close()
-		delete(tr.sessions, opts.Addr)
+		tr.Lock()
+		defer tr.Unlock()
+
+		mConn.session.Close()
+		tr.sessionManager.Remove(mConn.session)
 		return nil, err
 	}
 	return cc, nil
@@ -171,11 +165,8 @@ func (tr *mwsTransporter) initSession(addr string, conn net.Conn, opts *gost.Han
 	if opts == nil {
 		opts = &gost.HandshakeOptions{}
 	}
-	wsOptions := tr.options
-	if wsOptions == nil {
-		wsOptions = &WSOptions{}
-	}
 
+	wsOptions := tr.options
 	path := wsOptions.Path
 	if path == "" {
 		path = defaultWSPath
@@ -191,7 +182,7 @@ func (tr *mwsTransporter) initSession(addr string, conn net.Conn, opts *gost.Han
 	if err != nil {
 		return nil, err
 	}
-	return &muxSession{conn: conn, session: session}, nil
+	return tr.sessionManager.Create(conn, session), nil
 }
 
 func (tr *mwsTransporter) Multiplex() bool {
@@ -199,14 +190,13 @@ func (tr *mwsTransporter) Multiplex() bool {
 }
 
 type wssTransporter struct {
-	tcpTransporter
-	options *WSOptions
+	wsTransporter
 }
 
 // WSSTransporter creates a Transporter that is used by websocket secure proxy client.
 func WSSTransporter(opts *WSOptions) gost.Transporter {
 	return &wssTransporter{
-		options: opts,
+		wsTransporter{options: opts},
 	}
 }
 
@@ -216,9 +206,6 @@ func (tr *wssTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOpti
 		option(opts)
 	}
 	wsOptions := tr.options
-	if wsOptions == nil {
-		wsOptions = &WSOptions{}
-	}
 
 	if opts.TLSConfig == nil {
 		opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
@@ -232,16 +219,14 @@ func (tr *wssTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOpti
 }
 
 type mwssTransporter struct {
-	options      *WSOptions
-	sessions     map[string]*muxSession
-	sessionMutex sync.Mutex
+	mwsTransporter
 }
 
 // MWSSTransporter creates a Transporter that is used by multiplex-websocket secure proxy client.
 func MWSSTransporter(opts *WSOptions) gost.Transporter {
 	return &mwssTransporter{
-		options:  opts,
-		sessions: make(map[string]*muxSession),
+		mwsTransporter{options: opts,
+			sessionManager: SessionManager(opts.muxSessions)},
 	}
 }
 
@@ -251,15 +236,21 @@ func (tr *mwssTransporter) Dial(addr string, options ...gost.DialOption) (conn n
 		option(opts)
 	}
 
-	tr.sessionMutex.Lock()
-	defer tr.sessionMutex.Unlock()
-
-	session, ok := tr.sessions[addr]
-	if session != nil && session.IsClosed() {
-		delete(tr.sessions, addr)
-		ok = false
+	node := tr.options.node
+	handshakeOpts := &gost.HandshakeOptions{}
+	for _, option := range node.HandshakeOptions {
+		option(handshakeOpts)
 	}
-	if !ok {
+
+	tr.Lock()
+	defer tr.Unlock()
+
+	session := tr.sessionManager.Get()
+	if session != nil && session.IsClosed() {
+		tr.sessionManager.Remove(session)
+		session = nil
+	}
+	if session == nil {
 		timeout := opts.Timeout
 		if timeout <= 0 {
 			timeout = gost.DialTimeout
@@ -275,47 +266,16 @@ func (tr *mwssTransporter) Dial(addr string, options ...gost.DialOption) (conn n
 		if err != nil {
 			return
 		}
-		session = &muxSession{conn: conn}
-		tr.sessions[addr] = session
-	}
-	return session.conn, nil
-}
 
-func (tr *mwssTransporter) Handshake(conn net.Conn, options ...gost.HandshakeOption) (net.Conn, error) {
-	opts := &gost.HandshakeOptions{}
-	for _, option := range options {
-		option(opts)
-	}
-
-	timeout := opts.Timeout
-	if timeout <= 0 {
-		timeout = gost.HandshakeTimeout
-	}
-
-	tr.sessionMutex.Lock()
-	defer tr.sessionMutex.Unlock()
-
-	conn.SetDeadline(time.Now().Add(timeout))
-	defer conn.SetDeadline(time.Time{})
-
-	session, ok := tr.sessions[opts.Addr]
-	if !ok || session.session == nil {
-		s, err := tr.initSession(opts.Addr, conn, opts)
+		session, err = tr.initSession(node.Addr, conn, handshakeOpts)
 		if err != nil {
 			conn.Close()
-			delete(tr.sessions, opts.Addr)
 			return nil, err
 		}
-		session = s
-		tr.sessions[opts.Addr] = session
 	}
-	cc, err := session.GetConn()
-	if err != nil {
-		session.Close()
-		delete(tr.sessions, opts.Addr)
-		return nil, err
-	}
-	return cc, nil
+
+	muxConn := &muxConn{session.conn, session}
+	return muxConn, nil
 }
 
 func (tr *mwssTransporter) initSession(addr string, conn net.Conn, opts *gost.HandshakeOptions) (*muxSession, error) {
@@ -323,9 +283,6 @@ func (tr *mwssTransporter) initSession(addr string, conn net.Conn, opts *gost.Ha
 		opts = &gost.HandshakeOptions{}
 	}
 	wsOptions := tr.options
-	if wsOptions == nil {
-		wsOptions = &WSOptions{}
-	}
 
 	tlsConfig := opts.TLSConfig
 	if tlsConfig == nil {
@@ -346,11 +303,7 @@ func (tr *mwssTransporter) initSession(addr string, conn net.Conn, opts *gost.Ha
 	if err != nil {
 		return nil, err
 	}
-	return &muxSession{conn: conn, session: session}, nil
-}
-
-func (tr *mwssTransporter) Multiplex() bool {
-	return true
+	return tr.sessionManager.Create(conn, session), nil
 }
 
 type wsListener struct {

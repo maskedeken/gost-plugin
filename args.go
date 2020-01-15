@@ -23,6 +23,7 @@ type Options struct {
 	fastopen   bool
 	cert       string
 	key        string
+	mux        uint
 }
 
 // Args maps a string key to a list of values. It is similar to url.Values.
@@ -88,6 +89,13 @@ func parseOpts(opts *Options) error {
 		}
 		if _, b := args.Get("fast-open"); b {
 			opts.fastopen = true
+		}
+		if c, b := args.Get("mux"); b {
+			mux, err := strconv.ParseUint(c, 10, 16)
+			if err != nil {
+				return err
+			}
+			opts.mux = uint(mux)
 		}
 		if c, b := args.Get("host"); b {
 			opts.hostname = c
