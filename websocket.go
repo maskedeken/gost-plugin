@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
@@ -280,6 +281,337 @@ func (tr *mwssTransporter) initSession(addr string, conn net.Conn, opts *gost.Ha
 	return smux.Client(conn, smuxConfig)
 }
 
+type wsListener struct {
+	addr     net.Addr
+	upgrader *websocket.Upgrader
+	srv      *http.Server
+	connChan chan net.Conn
+	errChan  chan error
+}
+
+// WSListener creates a Listener for websocket proxy server.
+func WSListener(addr string, options *WSOptions) (gost.Listener, error) {
+	if options == nil {
+		options = &WSOptions{}
+	}
+	l := &wsListener{
+		upgrader: &websocket.Upgrader{
+			ReadBufferSize:    options.ReadBufferSize,
+			WriteBufferSize:   options.WriteBufferSize,
+			CheckOrigin:       func(r *http.Request) bool { return true },
+			EnableCompression: options.EnableCompression,
+		},
+		connChan: make(chan net.Conn, 1024),
+		errChan:  make(chan error, 1),
+	}
+
+	path := options.Path
+	if path == "" {
+		path = defaultWSPath
+	}
+	mux := http.NewServeMux()
+	mux.Handle(path, http.HandlerFunc(l.upgrade))
+	l.srv = &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	listenCfg := &net.ListenConfig{Control: getListenerControlFunc(options)}
+	ln, err := listenCfg.Listen(context.Background(), "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	l.addr = ln.Addr()
+	tcpListener, _ := ln.(*net.TCPListener)
+
+	go func() {
+		err := l.srv.Serve(tcpKeepAliveListener{tcpListener})
+		if err != nil {
+			l.errChan <- err
+		}
+		close(l.errChan)
+	}()
+	select {
+	case err := <-l.errChan:
+		return nil, err
+	default:
+	}
+
+	return l, nil
+}
+
+func (l *wsListener) upgrade(w http.ResponseWriter, r *http.Request) {
+	conn, err := l.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		Logf("[ws] %s - %s : %s", r.RemoteAddr, l.addr, err)
+		return
+	}
+	select {
+	case l.connChan <- websocketServerConn(conn):
+	default:
+		conn.Close()
+		Logf("[ws] %s - %s: connection queue is full", r.RemoteAddr, l.addr)
+	}
+}
+
+func (l *wsListener) Accept() (conn net.Conn, err error) {
+	select {
+	case conn = <-l.connChan:
+	case err = <-l.errChan:
+	}
+	return
+}
+
+func (l *wsListener) Close() error {
+	return l.srv.Close()
+}
+
+func (l *wsListener) Addr() net.Addr {
+	return l.addr
+}
+
+type mwsListener struct {
+	addr     net.Addr
+	upgrader *websocket.Upgrader
+	srv      *http.Server
+	connChan chan net.Conn
+	errChan  chan error
+}
+
+// MWSListener creates a Listener for multiplex-websocket proxy server.
+func MWSListener(addr string, options *WSOptions) (gost.Listener, error) {
+	if options == nil {
+		options = &WSOptions{}
+	}
+	l := &mwsListener{
+		upgrader: &websocket.Upgrader{
+			ReadBufferSize:    options.ReadBufferSize,
+			WriteBufferSize:   options.WriteBufferSize,
+			CheckOrigin:       func(r *http.Request) bool { return true },
+			EnableCompression: options.EnableCompression,
+		},
+		connChan: make(chan net.Conn, 1024),
+		errChan:  make(chan error, 1),
+	}
+
+	path := options.Path
+	if path == "" {
+		path = defaultWSPath
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle(path, http.HandlerFunc(l.upgrade))
+	l.srv = &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	listenCfg := &net.ListenConfig{Control: getListenerControlFunc(options)}
+	ln, err := listenCfg.Listen(context.Background(), "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	l.addr = ln.Addr()
+	tcpListener, _ := ln.(*net.TCPListener)
+
+	go func() {
+		err := l.srv.Serve(tcpKeepAliveListener{tcpListener})
+		if err != nil {
+			l.errChan <- err
+		}
+		close(l.errChan)
+	}()
+	select {
+	case err := <-l.errChan:
+		return nil, err
+	default:
+	}
+
+	return l, nil
+}
+
+func (l *mwsListener) upgrade(w http.ResponseWriter, r *http.Request) {
+	conn, err := l.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		Logf("[mws] %s - %s : %s", r.RemoteAddr, l.addr, err)
+		return
+	}
+
+	l.mux(websocketServerConn(conn))
+}
+
+func (l *mwsListener) mux(conn net.Conn) {
+	smuxConfig := smux.DefaultConfig()
+	mux, err := smux.Server(conn, smuxConfig)
+	if err != nil {
+		Logf("[mws] %s - %s : %s", conn.RemoteAddr(), l.Addr(), err)
+		return
+	}
+	defer mux.Close()
+
+	for {
+		stream, err := mux.AcceptStream()
+		if err != nil {
+			Logf("[mws] accept stream:", err)
+			return
+		}
+
+		cc := &muxStreamConn{Conn: conn, stream: stream}
+		select {
+		case l.connChan <- cc:
+		default:
+			cc.Close()
+			Logf("[mws] %s - %s: connection queue is full", conn.RemoteAddr(), conn.LocalAddr())
+		}
+	}
+}
+
+func (l *mwsListener) Accept() (conn net.Conn, err error) {
+	select {
+	case conn = <-l.connChan:
+	case err = <-l.errChan:
+	}
+	return
+}
+
+func (l *mwsListener) Close() error {
+	return l.srv.Close()
+}
+
+func (l *mwsListener) Addr() net.Addr {
+	return l.addr
+}
+
+type wssListener struct {
+	*wsListener
+}
+
+// WSSListener creates a Listener for websocket secure proxy server.
+func WSSListener(addr string, tlsConfig *tls.Config, options *WSOptions) (gost.Listener, error) {
+	if options == nil {
+		options = &WSOptions{}
+	}
+	l := &wssListener{
+		wsListener: &wsListener{
+			upgrader: &websocket.Upgrader{
+				ReadBufferSize:    options.ReadBufferSize,
+				WriteBufferSize:   options.WriteBufferSize,
+				CheckOrigin:       func(r *http.Request) bool { return true },
+				EnableCompression: options.EnableCompression,
+			},
+			connChan: make(chan net.Conn, 1024),
+			errChan:  make(chan error, 1),
+		},
+	}
+
+	if tlsConfig == nil {
+		tlsConfig = gost.DefaultTLSConfig
+	}
+
+	path := options.Path
+	if path == "" {
+		path = defaultWSPath
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle(path, http.HandlerFunc(l.upgrade))
+	l.srv = &http.Server{
+		Addr:              addr,
+		TLSConfig:         tlsConfig,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	listenCfg := &net.ListenConfig{Control: getListenerControlFunc(options)}
+	ln, err := listenCfg.Listen(context.Background(), "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	l.addr = ln.Addr()
+	tcpListener, _ := ln.(*net.TCPListener)
+
+	go func() {
+		err := l.srv.Serve(tls.NewListener(tcpKeepAliveListener{tcpListener}, tlsConfig))
+		if err != nil {
+			l.errChan <- err
+		}
+		close(l.errChan)
+	}()
+	select {
+	case err := <-l.errChan:
+		return nil, err
+	default:
+	}
+
+	return l, nil
+}
+
+type mwssListener struct {
+	*mwsListener
+}
+
+// MWSSListener creates a Listener for multiplex-websocket secure proxy server.
+func MWSSListener(addr string, tlsConfig *tls.Config, options *WSOptions) (gost.Listener, error) {
+	if options == nil {
+		options = &WSOptions{}
+	}
+	l := &mwssListener{
+		mwsListener: &mwsListener{
+			upgrader: &websocket.Upgrader{
+				ReadBufferSize:    options.ReadBufferSize,
+				WriteBufferSize:   options.WriteBufferSize,
+				CheckOrigin:       func(r *http.Request) bool { return true },
+				EnableCompression: options.EnableCompression,
+			},
+			connChan: make(chan net.Conn, 1024),
+			errChan:  make(chan error, 1),
+		},
+	}
+
+	if tlsConfig == nil {
+		tlsConfig = gost.DefaultTLSConfig
+	}
+
+	path := options.Path
+	if path == "" {
+		path = defaultWSPath
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle(path, http.HandlerFunc(l.upgrade))
+	l.srv = &http.Server{
+		Addr:              addr,
+		TLSConfig:         tlsConfig,
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+
+	listenCfg := &net.ListenConfig{Control: getListenerControlFunc(options)}
+	ln, err := listenCfg.Listen(context.Background(), "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	l.addr = ln.Addr()
+	tcpListener, _ := ln.(*net.TCPListener)
+
+	go func() {
+		err := l.srv.Serve(tls.NewListener(tcpKeepAliveListener{tcpListener}, tlsConfig))
+		if err != nil {
+			l.errChan <- err
+		}
+		close(l.errChan)
+	}()
+	select {
+	case err := <-l.errChan:
+		return nil, err
+	default:
+	}
+
+	return l, nil
+}
+
 type websocketConn struct {
 	conn *websocket.Conn
 	rb   []byte
@@ -316,6 +648,13 @@ func websocketClientConn(url string, conn net.Conn, tlsConfig *tls.Config, optio
 	}
 	resp.Body.Close()
 	return &websocketConn{conn: c}, nil
+}
+
+func websocketServerConn(conn *websocket.Conn) net.Conn {
+	// conn.EnableWriteCompression(true)
+	return &websocketConn{
+		conn: conn,
+	}
 }
 
 func (c *websocketConn) Read(b []byte) (n int, err error) {

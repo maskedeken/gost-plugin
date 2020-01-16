@@ -200,19 +200,21 @@ func configServer(opts *Options) (*Router, error) {
 	}
 
 	var ln gost.Listener
-	wsOpts := &gost.WSOptions{Path: opts.path}
+	wsOpts := &WSOptions{}
+	wsOpts.Path = opts.path
+	wsOpts.Fastopen = opts.fastopen
 	if !opts.nocomp {
 		wsOpts.EnableCompression = true
 	}
 	switch node.Transport {
 	case "ws":
-		ln, err = gost.WSListener(node.Addr, wsOpts)
+		ln, err = WSListener(node.Addr, wsOpts)
 	case "mws":
-		ln, err = gost.MWSListener(node.Addr, wsOpts)
+		ln, err = MWSListener(node.Addr, wsOpts)
 	case "wss":
-		ln, err = gost.WSSListener(node.Addr, tlsCfg, wsOpts)
+		ln, err = WSSListener(node.Addr, tlsCfg, wsOpts)
 	case "mwss":
-		ln, err = gost.MWSSListener(node.Addr, tlsCfg, wsOpts)
+		ln, err = MWSSListener(node.Addr, tlsCfg, wsOpts)
 	default:
 		return nil, newError("unsupported mode:", opts.mode)
 	}
