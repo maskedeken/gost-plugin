@@ -76,17 +76,23 @@ func SessionManager(maxSessions uint16) *sessionManager {
 
 func (sm *sessionManager) Get() *muxSession {
 	session := sm.sessions[sm.currentSession]
-	if session != nil {
-		sm.Next()
+	if session == nil {
+		return nil
 	}
+
+	if session.session != nil && session.session.IsClosed() {
+		sm.sessions[sm.currentSession] = nil
+		return nil
+	}
+
+	sm.Next()
 	return session
 }
 
-func (sm *sessionManager) Create(conn net.Conn, session *smux.Session) *muxSession {
+func (sm *sessionManager) Allocate(conn net.Conn) *muxSession {
 	mSession := &muxSession{
-		id:      sm.currentSession,
-		conn:    conn,
-		session: session,
+		id:   sm.currentSession,
+		conn: conn,
 	}
 
 	sm.sessions[sm.currentSession] = mSession
@@ -104,4 +110,9 @@ func (sm *sessionManager) Size() int {
 
 func (sm *sessionManager) Next() {
 	sm.currentSession = (sm.currentSession + 1) % sm.maxSessions
+}
+
+type muxConn struct {
+	net.Conn
+	session *muxSession
 }

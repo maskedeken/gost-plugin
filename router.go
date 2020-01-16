@@ -105,7 +105,7 @@ func parseForwardChain(opts *Options) (*gost.Chain, error) {
 	}
 
 	var tr gost.Transporter
-	wsOpts := &WSOptions{node: &node}
+	wsOpts := &WSOptions{}
 	wsOpts.Path = opts.path
 	wsOpts.Fastopen = opts.fastopen
 	mux := uint16(opts.mux)
