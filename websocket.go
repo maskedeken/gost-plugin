@@ -11,7 +11,7 @@ import (
 
 	"github.com/ginuerzh/gost"
 	"gopkg.in/gorilla/websocket.v1"
-	"gopkg.in/xtaci/smux.v1"
+	"github.com/xtaci/smux"
 )
 
 const (
