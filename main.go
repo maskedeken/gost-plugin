@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	VERSION = "20200116"
+	VERSION = "20200117"
 )
 
 var (
@@ -43,7 +43,7 @@ func main() {
 	flags.BoolVar(&options.tlsEnabled, "tls", false, "Enable TLS.")
 	flags.BoolVar(&options.nocomp, "nocomp", false, "Disable compression.")
 	flags.BoolVar(&options.fastopen, "fast-open", false, "Enable TCP Fast Open.")
-	flags.BoolVar(&options.insecure, "insecure", false, "Allow Insecure TLS connections.")
+	flags.BoolVar(&options.insecure, "insecure", false, "Allow insecure TLS connections.")
 	flags.UintVar(&options.mux, "mux", 1, "MUX sessions for Multiplex Websocket.")
 
 	flags.Parse(os.Args[1:])
