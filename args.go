@@ -21,6 +21,7 @@ type Options struct {
 	server     bool
 	nocomp     bool
 	fastopen   bool
+	insecure   bool
 	cert       string
 	key        string
 	mux        uint
@@ -89,6 +90,9 @@ func parseOpts(opts *Options) error {
 		}
 		if _, b := args.Get("fast-open"); b {
 			opts.fastopen = true
+		}
+		if _, b := args.Get("insecure"); b {
+			opts.insecure = true
 		}
 		if c, b := args.Get("mux"); b {
 			mux, err := strconv.ParseUint(c, 10, 16)

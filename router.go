@@ -140,7 +140,8 @@ func parseForwardChain(opts *Options) (*gost.Chain, error) {
 	}
 
 	tlsCfg := &tls.Config{
-		ServerName: serverName,
+		ServerName:         serverName,
+		InsecureSkipVerify: opts.insecure,
 	}
 
 	node.HandshakeOptions = []gost.HandshakeOption{
