@@ -1,42 +1,40 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"os"
 )
 
-type Error struct {
-	message []interface{}
+type hasInnerError interface {
+	// Inner returns the underlying error of this one.
+	Inner() error
 }
 
-func (err *Error) Error() string {
-	builder := strings.Builder{}
-	for _, value := range err.message {
-		builder.WriteString(toString(value))
+// cause returns the root cause of this error.
+func cause(err error) error {
+	if err == nil {
+		return nil
 	}
-	return builder.String()
-}
-
-// ToString serialize an arbitrary value into string.
-func toString(v interface{}) string {
-	if v == nil {
-		return " "
+L:
+	for {
+		switch inner := err.(type) {
+		case hasInnerError:
+			if inner.Inner() == nil {
+				break L
+			}
+			err = inner.Inner()
+		case *os.PathError:
+			if inner.Err == nil {
+				break L
+			}
+			err = inner.Err
+		case *os.SyscallError:
+			if inner.Err == nil {
+				break L
+			}
+			err = inner.Err
+		default:
+			break L
+		}
 	}
-
-	switch value := v.(type) {
-	case string:
-		return value
-	case *string:
-		return *value
-	case fmt.Stringer:
-		return value.String()
-	case error:
-		return value.Error()
-	default:
-		return fmt.Sprintf("%+v", value)
-	}
-}
-
-func newError(msg ...interface{}) *Error {
-	return &Error{message: msg}
+	return err
 }

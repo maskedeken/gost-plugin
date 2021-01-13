@@ -1,118 +1,124 @@
 package main
 
 import (
+	"context"
+	"log"
+	"math/rand"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/xtaci/smux"
 )
 
-type muxStreamConn struct {
-	net.Conn
-	stream *smux.Stream
-}
+type muxID uint32
 
-func (c *muxStreamConn) Read(b []byte) (n int, err error) {
-	return c.stream.Read(b)
-}
-
-func (c *muxStreamConn) Write(b []byte) (n int, err error) {
-	return c.stream.Write(b)
-}
-
-func (c *muxStreamConn) Close() error {
-	return c.stream.Close()
+func generateMuxID() muxID {
+	return muxID(rand.Uint32())
 }
 
 type muxSession struct {
-	id      uint16
-	conn    net.Conn
-	session *smux.Session
+	id             muxID
+	client         *smux.Session
+	underlayConn   net.Conn
+	lastActiveTime time.Time
 }
 
-func (session *muxSession) GetConn() (net.Conn, error) {
-	stream, err := session.session.OpenStream()
+type muxPool struct {
+	sync.Mutex
+	concurrency uint
+	timeout     time.Duration
+	ctx         context.Context
+	sessions    map[muxID]*muxSession
+}
+
+func (p *muxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
+	openNewStream := func(sess *muxSession) (net.Conn, error) {
+		rwc, err := sess.client.OpenStream()
+		sess.lastActiveTime = time.Now()
+		if err != nil {
+			sess.underlayConn.Close()
+			sess.client.Close()
+			delete(p.sessions, sess.id)
+			return nil, err
+		}
+
+		return rwc, err
+	}
+
+	p.Lock()
+	defer p.Unlock()
+	for _, sess := range p.sessions {
+		if sess.client.IsClosed() {
+			delete(p.sessions, sess.id)
+			continue
+		}
+
+		if sess.client.NumStreams() < int(p.concurrency) || p.concurrency <= 0 {
+			return openNewStream(sess)
+		}
+	}
+
+	id := generateMuxID()
+	conn, err := newConn()
 	if err != nil {
 		return nil, err
 	}
-	return &muxStreamConn{Conn: session.conn, stream: stream}, nil
-}
 
-func (session *muxSession) Accept() (net.Conn, error) {
-	stream, err := session.session.AcceptStream()
+	smuxConfig := smux.DefaultConfig()
+	client, err := smux.Client(conn, smuxConfig)
 	if err != nil {
 		return nil, err
 	}
-	return &muxStreamConn{Conn: session.conn, stream: stream}, nil
+
+	sess := &muxSession{id: id, client: client, underlayConn: conn}
+	p.sessions[id] = sess
+	return openNewStream(sess)
 }
 
-func (session *muxSession) Close() error {
-	if session.session == nil {
-		return nil
+func (p *muxPool) cleanLoop() {
+	var checkDuration time.Duration
+	checkDuration = p.timeout / 4
+
+	for {
+		select {
+		case <-time.After(checkDuration):
+			p.Lock()
+			for id, sess := range p.sessions {
+				if sess.client.IsClosed() {
+					sess.client.Close()
+					sess.underlayConn.Close()
+					delete(p.sessions, id)
+				} else if sess.client.NumStreams() == 0 && time.Now().Sub(sess.lastActiveTime) > p.timeout {
+					sess.client.Close()
+					sess.underlayConn.Close()
+					delete(p.sessions, id)
+				}
+			}
+			p.Unlock()
+		case <-p.ctx.Done():
+			p.Lock()
+			for id, sess := range p.sessions {
+				sess.client.Close()
+				sess.underlayConn.Close()
+				delete(p.sessions, id)
+			}
+			p.Unlock()
+
+			log.Println("all mux sessions are closed")
+			return
+		}
 	}
-	return session.session.Close()
 }
 
-func (session *muxSession) IsClosed() bool {
-	if session.session == nil {
-		return true
-	}
-	return session.session.IsClosed()
-}
-
-func (session *muxSession) NumStreams() int {
-	return session.session.NumStreams()
-}
-
-type sessionManager struct {
-	sessions       []*muxSession
-	maxSessions    uint16
-	currentSession uint16
-}
-
-func SessionManager(maxSessions uint16) *sessionManager {
-	return &sessionManager{maxSessions: maxSessions,
-		sessions: make([]*muxSession, maxSessions)}
-}
-
-func (sm *sessionManager) Get() *muxSession {
-	session := sm.sessions[sm.currentSession]
-	if session == nil {
-		return nil
-	}
-
-	if session.session != nil && session.session.IsClosed() {
-		sm.sessions[sm.currentSession] = nil
-		return nil
-	}
-
-	sm.Next()
-	return session
-}
-
-func (sm *sessionManager) Allocate(conn net.Conn) *muxSession {
-	mSession := &muxSession{
-		id:   sm.currentSession,
-		conn: conn,
+func newMuxPool(ctx context.Context, mux uint) *muxPool {
+	pool := &muxPool{
+		ctx:         ctx,
+		concurrency: mux,
+		timeout:     time.Duration(30) * time.Second,
+		sessions:    make(map[muxID]*muxSession),
 	}
 
-	sm.sessions[sm.currentSession] = mSession
-	sm.Next()
-	return mSession
-}
-
-func (sm *sessionManager) Remove(session *muxSession) {
-	sm.sessions[session.id] = nil
-}
-
-func (sm *sessionManager) Size() int {
-	return len(sm.sessions)
-}
-
-func (sm *sessionManager) Next() {
-	sm.currentSession = (sm.currentSession + 1) % sm.maxSessions
-}
-
-type muxConn struct {
-	net.Conn
-	session *muxSession
+	go pool.cleanLoop()
+	return pool
 }

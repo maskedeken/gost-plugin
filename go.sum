@@ -102,6 +102,8 @@ github.com/templexxx/xor v0.0.0-20181023030647-4e92f724b73b/go.mod h1:5XA7W9S6mn
 github.com/tjfoc/gmsm v1.0.1 h1:R11HlqhXkDospckjZEihx9SW/2VW0RgdwrykyWMFOQU=
 github.com/tjfoc/gmsm v1.0.1/go.mod h1:XxO4hdhhrzAd+G4CjDqaOkd0hUzmtPR/d3EiBBMn/wc=
 github.com/ulikunitz/xz v0.5.6/go.mod h1:2bypXElzHzzJZwzH67Y6wb67pO62Rzfn7BSiF4ABRW8=
+github.com/xtaci/smux v1.5.9 h1:Sysv8NISQoULTQut7Cj4RIb3jVP/WMw5nYGgvSSTWKo=
+github.com/xtaci/smux v1.5.9/go.mod h1:OMlQbT5vcgl2gb49mFkYo6SMf+zP3rcjcwQz7ZU7IGY=
 gitlab.com/yawning/obfs4.git v0.0.0-20190621002404-c357dd56dfa6 h1:nqCHIuN9U/kSzwPs3PC2LXiJftKrPaRhzx43Ml9JWfA=
 gitlab.com/yawning/obfs4.git v0.0.0-20190621002404-c357dd56dfa6/go.mod h1:3pn2QYDNL2wbsdyAgAhKdaCbQt/u/qx1HwuI5QoMUfk=
 gitlab.com/yawning/utls.git v0.0.11-1/go.mod h1:eYdrOOCoedNc3xw50kJ/s8JquyxeS5kr3vkFZFPTI9w=

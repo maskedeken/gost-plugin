@@ -9,24 +9,6 @@ import (
 	"strings"
 )
 
-type Options struct {
-	localAddr  string
-	localPort  uint
-	remoteAddr string
-	remotePort uint
-	hostname   string
-	mode       string
-	path       string
-	tlsEnabled bool
-	server     bool
-	nocomp     bool
-	fastopen   bool
-	insecure   bool
-	cert       string
-	key        string
-	mux        uint
-}
-
 // Args maps a string key to a list of values. It is similar to url.Values.
 type Args map[string][]string
 
@@ -87,9 +69,6 @@ func parseOpts(opts *Options) error {
 		}
 		if _, b := args.Get("nocomp"); b {
 			opts.nocomp = true
-		}
-		if _, b := args.Get("fast-open"); b {
-			opts.fastopen = true
 		}
 		if _, b := args.Get("insecure"); b {
 			opts.insecure = true

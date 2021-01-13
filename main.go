@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -11,11 +12,11 @@ import (
 )
 
 var (
-	VERSION = "20200117"
+	VERSION = "unknown"
 )
 
 var (
-	options = &Options{}
+	options = Options{}
 )
 
 func init() {
@@ -28,6 +29,8 @@ func printVersion() {
 }
 
 func main() {
+	var err error
+
 	flags := flag.NewFlagSet("gost-plugin", flag.ExitOnError)
 	version := flags.Bool("version", false, "Show current version of gost-plugin")
 	flags.StringVar(&options.localAddr, "localAddr", "127.0.0.1", "local address to listen on.")
@@ -42,7 +45,6 @@ func main() {
 	flags.BoolVar(&options.server, "server", false, "Run in server mode.")
 	flags.BoolVar(&options.tlsEnabled, "tls", false, "Enable TLS.")
 	flags.BoolVar(&options.nocomp, "nocomp", false, "Disable compression.")
-	flags.BoolVar(&options.fastopen, "fast-open", false, "Enable TCP Fast Open.")
 	flags.BoolVar(&options.insecure, "insecure", false, "Allow insecure TLS connections.")
 	flags.UintVar(&options.mux, "mux", 1, "MUX sessions for Multiplex Websocket.")
 
@@ -52,22 +54,33 @@ func main() {
 		return
 	}
 
-	err := parseOpts(options)
+	err = parseOpts(&options)
 	if err != nil {
 		log.Fatal(err.Error())
 		os.Exit(23)
 	}
 
-	router, err := NewRouter(options)
-	if err != nil {
-		log.Fatal("failed to start server:", err.Error())
-		os.Exit(1)
+	var worker Worker
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	if options.server { // server mode
+		worker, err = NewServer(ctx, options)
+		if err != nil {
+			log.Fatalf("failed to start server: %s", err.Error())
+			os.Exit(1)
+		}
+
+	} else { // client mode
+		worker, err = NewClient(ctx, options)
+		if err != nil {
+			log.Fatalf("failed to start client: %s", err.Error())
+			os.Exit(1)
+		}
 	}
 
-	go router.Serve()
-
 	defer func() {
-		err := router.Close()
+		cancel()
+		err := worker.Shutdown()
 		if err != nil {
 			log.Println(err.Error())
 		}
