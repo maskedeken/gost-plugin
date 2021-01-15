@@ -264,7 +264,12 @@ func keepAccepting(ctx context.Context, listener net.Listener, connChan chan net
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if errors.IsClosed(err) {
+				break
+			}
+
 			log.Errorln("failed to accept connection: %s", err)
+
 			select {
 			case <-ctx.Done():
 				log.Debugln("context ends")
@@ -287,7 +292,12 @@ func keepMuxAccepting(ctx context.Context, listener net.Listener, connChan chan 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if errors.IsClosed(err) {
+				break
+			}
+
 			log.Errorln("failed to accept connection: %s", err)
+
 			select {
 			case <-ctx.Done():
 				log.Debugln("context ends")
