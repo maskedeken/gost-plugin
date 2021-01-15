@@ -13,15 +13,15 @@ See command line args for advanced usages.
 On your server
 
 ```sh
-ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;mode=tls"
-ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;mode=mtls"
+ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=tls"
+ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=mtls"
 ```
 
 On your client
 
 ```sh
-ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "mode=tls"
-ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "mode=mtls;mux=1"
+ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "host=mydomain.me;mode=tls"
+ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "host=mydomain.me;mode=mtls;mux=1"
 ```
 
 ### Shadowsocks over Websocket/Multiplex Websocket (HTTP)
