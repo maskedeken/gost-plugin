@@ -1,13 +1,15 @@
-package main
+package mux
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/maskedeken/gost-plugin/args"
+	C "github.com/maskedeken/gost-plugin/constant"
+	"github.com/maskedeken/gost-plugin/log"
 	"github.com/xtaci/smux"
 )
 
@@ -24,7 +26,7 @@ type muxSession struct {
 	lastActiveTime time.Time
 }
 
-type muxPool struct {
+type MuxPool struct {
 	sync.Mutex
 	concurrency uint
 	timeout     time.Duration
@@ -32,7 +34,7 @@ type muxPool struct {
 	sessions    map[muxID]*muxSession
 }
 
-func (p *muxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
+func (p *MuxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
 	openNewStream := func(sess *muxSession) (net.Conn, error) {
 		rwc, err := sess.client.OpenStream()
 		sess.lastActiveTime = time.Now()
@@ -76,7 +78,7 @@ func (p *muxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
 	return openNewStream(sess)
 }
 
-func (p *muxPool) cleanLoop() {
+func (p *MuxPool) cleanLoop() {
 	var checkDuration time.Duration
 	checkDuration = p.timeout / 4
 
@@ -105,16 +107,17 @@ func (p *muxPool) cleanLoop() {
 			}
 			p.Unlock()
 
-			log.Println("all mux sessions are closed")
+			log.Infoln("all mux sessions are closed")
 			return
 		}
 	}
 }
 
-func newMuxPool(ctx context.Context, mux uint) *muxPool {
-	pool := &muxPool{
+func NewMuxPool(ctx context.Context) *MuxPool {
+	options := ctx.Value(C.OPTIONS).(*args.Options)
+	pool := &MuxPool{
 		ctx:         ctx,
-		concurrency: mux,
+		concurrency: options.Mux,
 		timeout:     time.Duration(30) * time.Second,
 		sessions:    make(map[muxID]*muxSession),
 	}

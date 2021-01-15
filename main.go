@@ -4,11 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
+
+	"github.com/maskedeken/gost-plugin/args"
+	"github.com/maskedeken/gost-plugin/log"
+	"github.com/maskedeken/gost-plugin/net"
 )
 
 var (
@@ -16,7 +19,7 @@ var (
 )
 
 var (
-	options = Options{}
+	options = args.Options{}
 )
 
 func init() {
@@ -33,20 +36,20 @@ func main() {
 
 	flags := flag.NewFlagSet("gost-plugin", flag.ExitOnError)
 	version := flags.Bool("version", false, "Show current version of gost-plugin")
-	flags.StringVar(&options.localAddr, "localAddr", "127.0.0.1", "local address to listen on.")
-	flags.UintVar(&options.localPort, "localPort", 1984, "local port to listen on.")
-	flags.StringVar(&options.remoteAddr, "remoteAddr", "127.0.0.1", "remote address to forward.")
-	flags.UintVar(&options.remotePort, "remotePort", 1080, "remote port to forward.")
-	flags.StringVar(&options.path, "path", "/", "URL path for websocket.")
-	flags.StringVar(&options.hostname, "host", "", "Hostname for server.")
-	flags.StringVar(&options.cert, "cert", "", "Path to TLS certificate file.")
-	flags.StringVar(&options.key, "key", "", "(server) Path to TLS key file.")
-	flags.StringVar(&options.mode, "mode", "ws", "Transport mode = ws(Websocket) mws(Multiplex Websocket).")
-	flags.BoolVar(&options.server, "server", false, "Run in server mode.")
-	flags.BoolVar(&options.tlsEnabled, "tls", false, "Enable TLS.")
-	flags.BoolVar(&options.nocomp, "nocomp", false, "Disable compression.")
-	flags.BoolVar(&options.insecure, "insecure", false, "Allow insecure TLS connections.")
-	flags.UintVar(&options.mux, "mux", 1, "MUX sessions for Multiplex Websocket.")
+	flags.StringVar(&options.LocalAddr, "localAddr", "127.0.0.1", "local address to listen on.")
+	flags.UintVar(&options.LocalPort, "localPort", 1984, "local port to listen on.")
+	flags.StringVar(&options.RemoteAddr, "remoteAddr", "127.0.0.1", "remote address to forward.")
+	flags.UintVar(&options.RemotePort, "remotePort", 1080, "remote port to forward.")
+	flags.StringVar(&options.Path, "path", "/", "URL path for websocket.")
+	flags.StringVar(&options.Hostname, "host", "", "(client) Hostname for server.")
+	flags.StringVar(&options.Cert, "cert", "", "(server) Path to TLS certificate file.")
+	flags.StringVar(&options.Key, "key", "", "(server) Path to TLS key file.")
+	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, mtls, ws, wss, mws, mwss.")
+	flags.BoolVar(&options.Server, "server", false, "Run in server mode.")
+	flags.BoolVar(&options.Nocomp, "nocomp", false, "(client) Disable websocket compression.")
+	flags.BoolVar(&options.Insecure, "insecure", false, "(client) Allow insecure TLS connections.")
+	flags.UintVar(&options.Mux, "mux", 1, "(client) MUX sessions per Websocket connection.")
+	flags.UintVar(&options.LogLevel, "logLevel", 3, "Log level (0:Panic, 1:Fatal, 2:Error, 3:Warn, 4:Info, 5:Debug, 6:Trace).")
 
 	flags.Parse(os.Args[1:])
 	if *version {
@@ -54,35 +57,32 @@ func main() {
 		return
 	}
 
-	err = parseOpts(&options)
+	if options.LogLevel > 6 {
+		options.LogLevel = 6
+	}
+	log.SetLevel(options.LogLevel)
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	ctx, err = args.ApplyOptions(ctx, &options)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalln("failed to init context: %s", err)
 		os.Exit(23)
 	}
 
-	var worker Worker
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	if options.server { // server mode
-		worker, err = NewServer(ctx, options)
-		if err != nil {
-			log.Fatalf("failed to start server: %s", err.Error())
-			os.Exit(1)
-		}
-
-	} else { // client mode
-		worker, err = NewClient(ctx, options)
-		if err != nil {
-			log.Fatalf("failed to start client: %s", err.Error())
-			os.Exit(1)
-		}
+	handler, err := net.NewHandler(ctx)
+	if err != nil {
+		log.Fatalln("failed to create handler: %s", err)
+		os.Exit(23)
 	}
+
+	handler.Serve(ctx)
 
 	defer func() {
 		cancel()
-		err := worker.Shutdown()
+		err := handler.Close()
 		if err != nil {
-			log.Println(err.Error())
+			log.Warnln("failed to close handler: %s", err)
 		}
 	}()
 

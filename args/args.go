@@ -1,13 +1,41 @@
-package main
+package args
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+
+	C "github.com/maskedeken/gost-plugin/constant"
 )
+
+type Options struct {
+	LocalAddr  string
+	LocalPort  uint
+	RemoteAddr string
+	RemotePort uint
+	Hostname   string
+	Mode       string
+	Path       string
+	Server     bool
+	Nocomp     bool
+	Insecure   bool
+	Cert       string
+	Key        string
+	Mux        uint
+	LogLevel   uint
+}
+
+func (o *Options) GetLocalAddr() string {
+	return fmt.Sprintf("%s:%d", fixAddr(o.LocalAddr), o.LocalPort)
+}
+
+func (o *Options) GetRemoteAddr() string {
+	return fmt.Sprintf("%s:%d", fixAddr(o.RemoteAddr), o.RemotePort)
+}
 
 // Args maps a string key to a list of values. It is similar to url.Values.
 type Args map[string][]string
@@ -56,87 +84,85 @@ func indexUnescaped(s string, term []byte) (int, string, error) {
 	return i, string(unesc), nil
 }
 
-func parseOpts(opts *Options) error {
+func ApplyOptions(ctx context.Context, options *Options) (context.Context, error) {
 
 	args, err := parseEnv()
 
 	if err == nil {
 		if c, b := args.Get("mode"); b {
-			opts.mode = c
-		}
-		if _, b := args.Get("tls"); b {
-			opts.tlsEnabled = true
+			options.Mode = c
 		}
 		if _, b := args.Get("nocomp"); b {
-			opts.nocomp = true
+			options.Nocomp = true
 		}
 		if _, b := args.Get("insecure"); b {
-			opts.insecure = true
+			options.Insecure = true
 		}
 		if c, b := args.Get("mux"); b {
 			mux, err := strconv.ParseUint(c, 10, 16)
 			if err != nil {
-				return err
+				return ctx, err
 			}
-			opts.mux = uint(mux)
+			options.Mux = uint(mux)
 		}
 		if c, b := args.Get("host"); b {
-			opts.hostname = c
+			options.Hostname = c
 		}
 		if c, b := args.Get("path"); b {
-			opts.path = c
+			options.Path = c
 		}
 		if c, b := args.Get("cert"); b {
-			opts.cert = c
+			options.Cert = c
 		}
 		if c, b := args.Get("key"); b {
-			opts.key = c
+			options.Key = c
 		}
 		if _, b := args.Get("server"); b {
-			opts.server = true
+			options.Server = true
 		}
 		if c, b := args.Get("localAddr"); b {
-			if opts.server {
-				opts.remoteAddr = c
+			if options.Server {
+				options.RemoteAddr = c
 			} else {
-				opts.localAddr = c
+				options.LocalAddr = c
 			}
 		}
 		if c, b := args.Get("localPort"); b {
 			lport, err := strconv.ParseUint(c, 10, 32)
 			if err != nil {
-				return err
+				return ctx, err
 			}
 
-			if opts.server {
-				opts.remotePort = uint(lport)
+			if options.Server {
+				options.RemotePort = uint(lport)
 			} else {
-				opts.localPort = uint(lport)
+				options.LocalPort = uint(lport)
 			}
 		}
 		if c, b := args.Get("remoteAddr"); b {
-			if opts.server {
-				opts.localAddr = c
+			if options.Server {
+				options.LocalAddr = c
 			} else {
-				opts.remoteAddr = c
+				options.RemoteAddr = c
 			}
 		}
 		if c, b := args.Get("remotePort"); b {
 			rport, err := strconv.ParseUint(c, 10, 32)
 			if err != nil {
-				return err
+				return ctx, err
 			}
 
-			if opts.server {
-				opts.localPort = uint(rport)
+			if options.Server {
+				options.LocalPort = uint(rport)
 			} else {
-				opts.remotePort = uint(rport)
+				options.RemotePort = uint(rport)
 			}
 		}
 
 	}
 
-	return err
+	ctx = context.WithValue(ctx, C.OPTIONS, options)
+	return ctx, err
 }
 
 func parseEnv() (opts Args, err error) {
@@ -268,4 +294,17 @@ func encodeSmethodArgs(args Args) string {
 	}
 
 	return strings.Join(pairs, ",")
+}
+
+func fixAddr(addr string) string {
+	size := len(addr)
+	if size == 0 {
+		return addr
+	}
+
+	if strings.Contains(addr, ":") && addr[0] != '[' && addr[size-1] != ']' {
+		return "[" + addr + "]"
+	}
+
+	return addr
 }
