@@ -11,7 +11,6 @@ import (
 
 	"github.com/maskedeken/gost-plugin/args"
 	"github.com/maskedeken/gost-plugin/log"
-	"github.com/maskedeken/gost-plugin/net"
 )
 
 var (
@@ -41,10 +40,11 @@ func main() {
 	flags.StringVar(&options.RemoteAddr, "remoteAddr", "127.0.0.1", "remote address to forward.")
 	flags.UintVar(&options.RemotePort, "remotePort", 1080, "remote port to forward.")
 	flags.StringVar(&options.Path, "path", "/", "URL path for websocket.")
-	flags.StringVar(&options.Hostname, "host", "", "(client) Hostname for server.")
+	flags.StringVar(&options.Hostname, "host", "", "(client) Host header for websocket.")
+	flags.StringVar(&options.ServerName, "serverName", "", "(client) Server name for server.")
 	flags.StringVar(&options.Cert, "cert", "", "(server) Path to TLS certificate file.")
 	flags.StringVar(&options.Key, "key", "", "(server) Path to TLS key file.")
-	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, mtls, ws, wss, mws, mwss.")
+	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, xtls, mtls, ws, wss, mws, mwss.\nSpecially xtls mode should work only if shadowsocks encryption method is set to NONE.")
 	flags.BoolVar(&options.Server, "server", false, "Run in server mode.")
 	flags.BoolVar(&options.Nocomp, "nocomp", false, "(client) Disable websocket compression.")
 	flags.BoolVar(&options.Insecure, "insecure", false, "(client) Allow insecure TLS connections.")
@@ -66,13 +66,13 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	ctx, err = args.ApplyOptions(ctx, &options)
 	if err != nil {
-		log.Fatalln("failed to init context: %s", err)
+		log.Fatalf("failed to init context: %s", err)
 		os.Exit(23)
 	}
 
-	handler, err := net.NewHandler(ctx)
+	handler, err := NewHandler(ctx)
 	if err != nil {
-		log.Fatalln("failed to create handler: %s", err)
+		log.Fatalf("failed to create handler: %s", err)
 		os.Exit(23)
 	}
 
@@ -82,7 +82,7 @@ func main() {
 		cancel()
 		err := handler.Close()
 		if err != nil {
-			log.Warnln("failed to close handler: %s", err)
+			log.Warnf("failed to close handler: %s", err)
 		}
 	}()
 

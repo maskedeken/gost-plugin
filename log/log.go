@@ -11,54 +11,44 @@ func init() {
 	log.SetOutput(os.Stdout)
 }
 
-func init() {
-	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel)
+func Infof(format string, v ...interface{}) {
+	log.Infof(format, v)
 }
 
-func Infoln(msg string, v ...interface{}) {
-	if len(v) == 0 {
-		log.Infoln(msg)
-		return
-	}
-
-	log.Infof(msg, v)
+func Infoln(args ...interface{}) {
+	log.Infoln(args)
 }
 
-func Warnln(msg string, v ...interface{}) {
-	if len(v) == 0 {
-		log.Warnln(msg)
-		return
-	}
-
-	log.Warnf(msg, v)
+func Warnf(format string, v ...interface{}) {
+	log.Warnf(format, v)
 }
 
-func Errorln(msg string, v ...interface{}) {
-	if len(v) == 0 {
-		log.Errorln(msg)
-		return
-	}
-
-	log.Errorf(msg, v)
+func Warnln(args ...interface{}) {
+	log.Warnln(args)
 }
 
-func Debugln(msg string, v ...interface{}) {
-	if len(v) == 0 {
-		log.Debugln(msg)
-		return
-	}
-
-	log.Debugf(msg, v)
+func Errorf(format string, v ...interface{}) {
+	log.Errorf(format, v)
 }
 
-func Fatalln(msg string, v ...interface{}) {
-	if len(v) == 0 {
-		log.Fatalln(msg)
-		return
-	}
+func Errorln(args ...interface{}) {
+	log.Errorln(args)
+}
 
-	log.Fatalf(msg, v...)
+func Debugf(format string, v ...interface{}) {
+	log.Debugf(format, v)
+}
+
+func Debugln(args ...interface{}) {
+	log.Debugln(args)
+}
+
+func Fatalf(format string, v ...interface{}) {
+	log.Fatalf(format, v)
+}
+
+func Fatalln(args ...interface{}) {
+	log.Fatalln(args)
 }
 
 func SetLevel(newLevel uint) {

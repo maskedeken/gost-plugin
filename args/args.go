@@ -20,6 +20,7 @@ type Options struct {
 	Hostname   string
 	Mode       string
 	Path       string
+	ServerName string
 	Server     bool
 	Nocomp     bool
 	Insecure   bool
@@ -119,6 +120,9 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 		}
 		if _, b := args.Get("server"); b {
 			options.Server = true
+		}
+		if c, b := args.Get("serverName"); b {
+			options.ServerName = c
 		}
 		if c, b := args.Get("localAddr"); b {
 			if options.Server {
