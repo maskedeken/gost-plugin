@@ -15,16 +15,16 @@ import (
 	"github.com/maskedeken/gost-plugin/log"
 )
 
-type Handler struct {
+type handler struct {
 	listener    gost.Listener
 	transporter gost.Transporter
 }
 
-func (h *Handler) Close() (err error) {
+func (h *handler) Close() (err error) {
 	return h.listener.Close()
 }
 
-func (h *Handler) Serve(ctx context.Context) {
+func (h *handler) Serve(ctx context.Context) {
 	go func() {
 		for {
 			conn, err := h.listener.AcceptConn()
@@ -69,7 +69,7 @@ func (h *Handler) Serve(ctx context.Context) {
 	go h.listener.Serve(ctx)
 }
 
-func NewHandler(ctx context.Context) (*Handler, error) {
+func newHandler(ctx context.Context) (*handler, error) {
 	var listener gost.Listener
 	var transporter gost.Transporter
 	var err error
@@ -113,7 +113,7 @@ func NewHandler(ctx context.Context) (*Handler, error) {
 
 	}
 
-	return &Handler{
+	return &handler{
 		listener:    listener,
 		transporter: transporter,
 	}, nil

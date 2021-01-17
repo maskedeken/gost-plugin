@@ -70,7 +70,7 @@ func main() {
 		os.Exit(23)
 	}
 
-	handler, err := NewHandler(ctx)
+	handler, err := newHandler(ctx)
 	if err != nil {
 		log.Fatalf("failed to create handler: %s", err)
 		os.Exit(23)

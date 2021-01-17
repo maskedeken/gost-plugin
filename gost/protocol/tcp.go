@@ -27,25 +27,30 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	return tc, nil
 }
 
+// TCPListener is Listener which handles tcp
 type TCPListener struct {
 	listener net.Listener
 	connChan chan net.Conn
 }
 
+// Close implements gost.Listener.Close()
 func (l *TCPListener) Close() error {
 	return l.listener.Close()
 }
 
+// AcceptConn implements gost.Listener.AcceptConn()
 func (l *TCPListener) AcceptConn() (conn net.Conn, err error) {
 	conn = <-l.connChan
 	return
 }
 
+// Serve implements gost.Listener.Serve()
 func (l *TCPListener) Serve(ctx context.Context) error {
 	keepAccepting(ctx, l.listener, l.connChan)
 	return nil
 }
 
+// NewTCPListener is constructor for TCPListener
 func NewTCPListener(ctx context.Context) (gost.Listener, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
 	lAddr := options.GetLocalAddr()
@@ -62,15 +67,18 @@ func NewTCPListener(ctx context.Context) (gost.Listener, error) {
 	return l, nil
 }
 
+// TCPTransporter is Listener which handles tcp
 type TCPTransporter struct {
 	ctx context.Context
 }
 
+// DialConn implements gost.Transporter.DialConn()
 func (t *TCPTransporter) DialConn() (net.Conn, error) {
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
 	return net.Dial("tcp", options.GetRemoteAddr())
 }
 
+// NewTCPTransporter is constructor for TCPTransporter
 func NewTCPTransporter(ctx context.Context) (gost.Transporter, error) {
 	return &TCPTransporter{ctx}, nil
 }

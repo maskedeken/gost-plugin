@@ -15,10 +15,12 @@ var (
 	xtlsSessionCache = xtls.NewLRUClientSessionCache(128)
 )
 
+// XTLSListener is Listener which handles XTLS
 type XTLSListener struct {
 	*TCPListener
 }
 
+// AcceptConn implements gost.Listener.AcceptConn()
 func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 	conn := <-l.connChan
 	if xtlsConn, ok := conn.(*xtls.Conn); ok {
@@ -30,6 +32,7 @@ func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 	return conn, nil
 }
 
+// NewXTLSListener is the constructor for XTLSListener
 func NewXTLSListener(ctx context.Context) (gost.Listener, error) {
 	inner, err := NewTCPListener(ctx)
 	if err != nil {
@@ -47,10 +50,12 @@ func NewXTLSListener(ctx context.Context) (gost.Listener, error) {
 	return l, nil
 }
 
+// XTLSTransporter is Transporter which handles XTLS
 type XTLSTransporter struct {
 	*TCPTransporter
 }
 
+// DialConn implements gost.Transporter.DialConn()
 func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 	conn, err := t.TCPTransporter.DialConn()
 	if err != nil {
@@ -70,6 +75,7 @@ func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 	return xtlsConn, nil
 }
 
+// NewXTLSTransporter is the constructor for XTLSTransporter
 func NewXTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 	inner, err := NewTCPTransporter(ctx)
 	if err != nil {

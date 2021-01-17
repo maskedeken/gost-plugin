@@ -12,10 +12,10 @@ import (
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/log"
-	"github.com/maskedeken/gost-plugin/mux"
 	"github.com/maskedeken/gost-plugin/registry"
 )
 
+// WSListener is Listener which handles websocket protocol
 type WSListener struct {
 	listener net.Listener
 	upgrader *websocket.Upgrader
@@ -23,18 +23,22 @@ type WSListener struct {
 	connChan chan net.Conn
 }
 
+// Close implements gost.Listener.Close()
 func (l *WSListener) Close() error {
 	return l.listener.Close()
 }
 
+// Serve implements gost.Listener.Serve()
 func (l *WSListener) Serve(ctx context.Context) error {
 	return l.server.Serve(l.listener)
 }
 
+// AcceptConn implements gost.Listener.AcceptConn()
 func (l *WSListener) AcceptConn() (net.Conn, error) {
 	return <-l.connChan, nil
 }
 
+// Upgrade turns net.Conn into websocket conn
 func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 	conn, err := l.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -50,6 +54,7 @@ func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// NewWSListener is the constructor for WSListener
 func NewWSListener(ctx context.Context) (gost.Listener, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
 
@@ -86,10 +91,12 @@ func NewWSListener(ctx context.Context) (gost.Listener, error) {
 	return l, nil
 }
 
+// WSSListener is Listener which handles websocket over tls
 type WSSListener struct {
 	*WSListener
 }
 
+// NewWSSListener is the constructor for WSSListener
 func NewWSSListener(ctx context.Context) (gost.Listener, error) {
 	inner, err := NewWSListener(ctx)
 	if err != nil {
@@ -107,59 +114,12 @@ func NewWSSListener(ctx context.Context) (gost.Listener, error) {
 	return l, nil
 }
 
-type MWSListener struct {
-	*WSListener
-}
-
-func (l *MWSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
-	conn, err := l.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Errorf("failed to upgrade to websocket: %s", err)
-		return
-	}
-
-	go serveMux(websocketServerConn(conn), l.connChan)
-}
-
-func NewMWSListener(ctx context.Context) (gost.Listener, error) {
-	inner, err := NewWSListener(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	l := &MWSListener{inner.(*WSListener)}
-	options := ctx.Value(C.OPTIONS).(*args.Options)
-	mux := http.NewServeMux()
-	mux.Handle(options.Path, http.HandlerFunc(l.Upgrade))
-	l.server.Handler = mux // replace handler
-	return l, nil
-}
-
-type MWSSListener struct {
-	*MWSListener
-}
-
-func NewMWSSListener(ctx context.Context) (gost.Listener, error) {
-	inner, err := NewMWSListener(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsConfig, err := buildServerTLSConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	l := &MWSSListener{inner.(*MWSListener)}
-	ln := l.listener
-	l.listener = tls.NewListener(ln, tlsConfig) // turn listener into tls.Listener
-	return l, nil
-}
-
+// WSTransporter is Transporter which handles websocket protocol
 type WSTransporter struct {
 	*TCPTransporter
 }
 
+// DialConn implements gost.Transporter.DialConn()
 func (t *WSTransporter) DialConn() (net.Conn, error) {
 	conn, err := t.TCPTransporter.DialConn()
 	if err != nil {
@@ -174,6 +134,7 @@ func (t *WSTransporter) DialConn() (net.Conn, error) {
 	return wsConn, nil
 }
 
+// NewWSTransporter is constructor for WSTransporter
 func NewWSTransporter(ctx context.Context) (gost.Transporter, error) {
 	inner, err := NewTCPTransporter(ctx)
 	if err != nil {
@@ -183,10 +144,12 @@ func NewWSTransporter(ctx context.Context) (gost.Transporter, error) {
 	return &WSTransporter{inner.(*TCPTransporter)}, nil
 }
 
+// WSSTransporter is Transporter which handles websocket over tls
 type WSSTransporter struct {
 	*TLSTransporter
 }
 
+// DialConn implements gost.Transporter.DialConn()
 func (t *WSSTransporter) DialConn() (net.Conn, error) {
 	conn, err := t.TLSTransporter.DialConn()
 	if err != nil {
@@ -201,6 +164,7 @@ func (t *WSSTransporter) DialConn() (net.Conn, error) {
 	return wsConn, nil
 }
 
+// NewWSSTransporter is constructor for WSSTransporter
 func NewWSSTransporter(ctx context.Context) (gost.Transporter, error) {
 	inner, err := NewTLSTransporter(ctx)
 	if err != nil {
@@ -208,46 +172,6 @@ func NewWSSTransporter(ctx context.Context) (gost.Transporter, error) {
 	}
 
 	return &WSSTransporter{inner.(*TLSTransporter)}, nil
-}
-
-type MWSTransporter struct {
-	*WSTransporter
-	pool *mux.MuxPool
-}
-
-func (t *MWSTransporter) DialConn() (net.Conn, error) {
-	return t.pool.DialMux(t.WSTransporter.DialConn)
-}
-
-func NewMWSTransporter(ctx context.Context) (gost.Transporter, error) {
-	inner, err := NewWSTransporter(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MWSTransporter{WSTransporter: inner.(*WSTransporter),
-		pool: mux.NewMuxPool(ctx),
-	}, nil
-}
-
-type MWSSTransporter struct {
-	*WSSTransporter
-	pool *mux.MuxPool
-}
-
-func (t *MWSSTransporter) DialConn() (net.Conn, error) {
-	return t.pool.DialMux(t.WSSTransporter.DialConn)
-}
-
-func NewMWSSTransporter(ctx context.Context) (gost.Transporter, error) {
-	inner, err := NewWSSTransporter(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MWSSTransporter{WSSTransporter: inner.(*WSSTransporter),
-		pool: mux.NewMuxPool(ctx),
-	}, nil
 }
 
 type websocketConn struct {
@@ -337,10 +261,4 @@ func init() {
 
 	registry.RegisterListener("wss", NewWSSListener)
 	registry.RegisterTransporter("wss", NewWSSTransporter)
-
-	registry.RegisterListener("mws", NewMWSListener)
-	registry.RegisterTransporter("mws", NewMWSTransporter)
-
-	registry.RegisterListener("mwss", NewMWSSListener)
-	registry.RegisterTransporter("mwss", NewMWSSTransporter)
 }
