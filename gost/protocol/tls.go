@@ -8,7 +8,6 @@ import (
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
-	"github.com/maskedeken/gost-plugin/mux"
 	"github.com/maskedeken/gost-plugin/registry"
 )
 
@@ -37,27 +36,6 @@ func NewTLSListener(ctx context.Context) (gost.Listener, error) {
 	ln := l.listener
 	l.listener = tls.NewListener(ln, tlsConfig)
 	return l, nil
-}
-
-// MTLSListener is Listener which handles multiplex tls
-type MTLSListener struct {
-	*TLSListener
-}
-
-// Serve implements gost.Listener.Serve()
-func (l *MTLSListener) Serve(ctx context.Context) error {
-	keepMuxAccepting(ctx, l.listener, l.connChan)
-	return nil
-}
-
-// NewMTLSListener is constructor for MTLSListener
-func NewMTLSListener(ctx context.Context) (gost.Listener, error) {
-	inner, err := NewTLSListener(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MTLSListener{inner.(*TLSListener)}, nil
 }
 
 // TLSTransporter is Transporter which handles tls
@@ -91,30 +69,6 @@ func NewTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 	return &TLSTransporter{inner.(*TCPTransporter)}, nil
 }
 
-// MTLSTransporter is Transporter which handles multiplex tls
-type MTLSTransporter struct {
-	*TLSTransporter
-	pool *mux.MuxPool
-}
-
-// DialConn implements gost.Transporter.DialConn()
-func (t *MTLSTransporter) DialConn() (net.Conn, error) {
-	return t.pool.DialMux(t.TLSTransporter.DialConn)
-}
-
-// NewMTLSTransporter is constructor for MTLSTransporter
-func NewMTLSTransporter(ctx context.Context) (gost.Transporter, error) {
-	inner, err := NewTLSTransporter(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MTLSTransporter{
-		TLSTransporter: inner.(*TLSTransporter),
-		pool:           mux.NewMuxPool(ctx),
-	}, nil
-}
-
 func buildServerTLSConfig(ctx context.Context) (*tls.Config, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
 	cert, err := tls.LoadX509KeyPair(options.Cert, options.Key)
@@ -144,7 +98,4 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 func init() {
 	registry.RegisterListener("tls", NewTLSListener)
 	registry.RegisterTransporter("tls", NewTLSTransporter)
-
-	registry.RegisterListener("mtls", NewMTLSListener)
-	registry.RegisterTransporter("mtls", NewMTLSTransporter)
 }

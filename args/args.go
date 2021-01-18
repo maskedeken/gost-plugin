@@ -28,6 +28,7 @@ type Options struct {
 	Key        string
 	Mux        uint
 	LogLevel   uint
+	XTLSShow   bool
 }
 
 func (o *Options) GetLocalAddr() string {
@@ -90,6 +91,9 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 	args, err := parseEnv()
 
 	if err == nil {
+		if _, b := args.Get("xtlsShow"); b {
+			options.XTLSShow = true
+		}
 		if c, b := args.Get("mode"); b {
 			options.Mode = c
 		}
@@ -175,6 +179,13 @@ func parseEnv() (opts Args, err error) {
 	ss_remote_port := os.Getenv("SS_REMOTE_PORT")
 	ss_local_host := os.Getenv("SS_LOCAL_HOST")
 	ss_local_port := os.Getenv("SS_LOCAL_PORT")
+	xtlsShow := os.Getenv("XTLS_SHOW")
+	if len(xtlsShow) > 0 {
+		if i, err := strconv.Atoi(xtlsShow); err == nil && i > 0 {
+			opts.Add("xtlsShow", "1")
+		}
+	}
+
 	if len(ss_remote_host) == 0 {
 		return
 	}

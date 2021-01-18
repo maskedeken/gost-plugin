@@ -18,6 +18,7 @@ var (
 // XTLSListener is Listener which handles XTLS
 type XTLSListener struct {
 	*TCPListener
+	xtlsShow bool
 }
 
 // AcceptConn implements gost.Listener.AcceptConn()
@@ -26,8 +27,8 @@ func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 	if xtlsConn, ok := conn.(*xtls.Conn); ok {
 		xtlsConn.RPRX = true
 		xtlsConn.DirectMode = true
-		// xtlsConn.SHOW = xtls_show
-		// xtlsConn.MARK = "XTLS"
+		xtlsConn.SHOW = l.xtlsShow
+		xtlsConn.MARK = "XTLS"
 	}
 	return conn, nil
 }
@@ -39,12 +40,16 @@ func NewXTLSListener(ctx context.Context) (gost.Listener, error) {
 		return nil, err
 	}
 
+	options := ctx.Value(C.OPTIONS).(*args.Options)
 	xtlsConfig, err := buildServerXTLSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	l := &XTLSListener{inner.(*TCPListener)}
+	l := &XTLSListener{
+		TCPListener: inner.(*TCPListener),
+		xtlsShow:    options.XTLSShow,
+	}
 	ln := l.listener
 	l.listener = xtls.NewListener(ln, xtlsConfig) // turn listener into xtls.Listener
 	return l, nil
@@ -53,6 +58,7 @@ func NewXTLSListener(ctx context.Context) (gost.Listener, error) {
 // XTLSTransporter is Transporter which handles XTLS
 type XTLSTransporter struct {
 	*TCPTransporter
+	xtlsShow bool
 }
 
 // DialConn implements gost.Transporter.DialConn()
@@ -70,8 +76,8 @@ func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 
 	xtlsConn.RPRX = true
 	xtlsConn.DirectMode = true
-	// xtlsConn.SHOW = xtls_show
-	// xtlsConn.MARK = "XTLS"
+	xtlsConn.SHOW = t.xtlsShow
+	xtlsConn.MARK = "XTLS"
 	return xtlsConn, nil
 }
 
@@ -82,7 +88,11 @@ func NewXTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 		return nil, err
 	}
 
-	return &XTLSTransporter{inner.(*TCPTransporter)}, nil
+	options := ctx.Value(C.OPTIONS).(*args.Options)
+	return &XTLSTransporter{
+		TCPTransporter: inner.(*TCPTransporter),
+		xtlsShow:       options.XTLSShow,
+	}, nil
 }
 
 func buildServerXTLSConfig(ctx context.Context) (*xtls.Config, error) {
