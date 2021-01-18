@@ -44,7 +44,7 @@ func main() {
 	flags.StringVar(&options.ServerName, "serverName", "", "(client) Server name for server.")
 	flags.StringVar(&options.Cert, "cert", "", "(server) Path to TLS certificate file.")
 	flags.StringVar(&options.Key, "key", "", "(server) Path to TLS key file.")
-	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, xtls, mtls, ws, wss, mws, mwss.\nSpecially xtls mode should work only if shadowsocks encryption method is set to NONE.")
+	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, xtls, mtls, ws, wss, mws, mwss.\nSpecially xtls mode should work only if shadowsocks cipher is set to NONE.")
 	flags.BoolVar(&options.Server, "server", false, "Run in server mode.")
 	flags.BoolVar(&options.Nocomp, "nocomp", false, "(client) Disable websocket compression.")
 	flags.BoolVar(&options.Insecure, "insecure", false, "(client) Allow insecure TLS connections.")
