@@ -10,7 +10,7 @@ import (
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/log"
 	"github.com/maskedeken/gost-plugin/registry"
-	"gopkg.in/xtaci/smux.v1"
+	"github.com/xtaci/smux"
 )
 
 type tcpKeepAliveListener struct {
