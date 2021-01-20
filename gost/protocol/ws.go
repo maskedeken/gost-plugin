@@ -17,10 +17,10 @@ import (
 
 // WSListener is Listener which handles websocket protocol
 type WSListener struct {
-	listener net.Listener
+	*TCPListener
 	upgrader *websocket.Upgrader
 	server   *http.Server
-	connChan chan net.Conn
+	path     string
 }
 
 // Close implements gost.Listener.Close()
@@ -40,6 +40,11 @@ func (l *WSListener) AcceptConn() (net.Conn, error) {
 
 // Upgrade turns net.Conn into websocket conn
 func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != l.path {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	conn, err := l.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("failed to upgrade to websocket: %s", err)
@@ -56,17 +61,15 @@ func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 
 // NewWSListener is the constructor for WSListener
 func NewWSListener(ctx context.Context) (gost.Listener, error) {
-	options := ctx.Value(C.OPTIONS).(*args.Options)
-
-	lAddr := options.GetLocalAddr()
-	ln, err := net.Listen("tcp", lAddr)
+	inner, err := NewTCPListener(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	options := ctx.Value(C.OPTIONS).(*args.Options)
 	l := &WSListener{
-		listener: &tcpKeepAliveListener{ln.(*net.TCPListener)},
-		connChan: make(chan net.Conn, 1024),
+		TCPListener: inner.(*TCPListener),
+		path:        options.Path,
 	}
 
 	l.upgrader = &websocket.Upgrader{
@@ -79,6 +82,7 @@ func NewWSListener(ctx context.Context) (gost.Listener, error) {
 		EnableCompression: !options.Nocomp,
 	}
 
+	lAddr := options.GetLocalAddr()
 	mux := http.NewServeMux()
 	mux.Handle(options.Path, http.HandlerFunc(l.Upgrade))
 	l.server = &http.Server{

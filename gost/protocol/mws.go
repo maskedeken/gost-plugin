@@ -21,6 +21,11 @@ type MWSListener struct {
 
 // Upgrade turns net.Conn into websocket conn
 func (l *MWSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != l.path {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	conn, err := l.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("failed to upgrade to websocket: %s", err)

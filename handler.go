@@ -9,7 +9,6 @@ import (
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
-	"github.com/maskedeken/gost-plugin/errors"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/gost/protocol"
 	"github.com/maskedeken/gost-plugin/log"
@@ -59,8 +58,8 @@ func (h *handler) Serve(ctx context.Context) {
 				go copyConn(outbound, inbound)
 
 				err = <-errChan
-				if err != nil && !errors.IsEOF(err) && !errors.IsClosed(err) {
-					log.Errorf("connection ends with error: %s", err)
+				if err != nil {
+					log.Debugf("connection ends with error: %s", err)
 				}
 			}(conn)
 		}
