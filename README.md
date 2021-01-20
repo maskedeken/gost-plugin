@@ -62,3 +62,16 @@ ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=my
 ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=mydomain.me;mode=mwss;mux=1"
 ```
 
+### Shadowsocks over QUIC
+
+On your server
+
+```sh
+ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=quic"
+```
+
+On your client
+
+```sh
+ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=mydomain.me;mode=quic"
+```
