@@ -90,12 +90,14 @@ func NewH2Listener(ctx context.Context) (gost.Listener, error) {
 	return l, nil
 }
 
+// H2Transporter is Transporter which handles http/2
 type H2Transporter struct {
 	*TCPTransporter
 	ctx    context.Context
 	client *http.Client
 }
 
+// DialConn implements gost.Transporter.DialConn()
 func (t *H2Transporter) DialConn() (net.Conn, error) {
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
 	reader, writer := io.Pipe()
@@ -130,6 +132,7 @@ func (t *H2Transporter) DialConn() (net.Conn, error) {
 
 }
 
+// NewH2Transporter is the constructor for H2Transporter
 func NewH2Transporter(ctx context.Context) (gost.Transporter, error) {
 	inner, err := NewTCPTransporter(ctx)
 	if err != nil {
@@ -174,7 +177,7 @@ func NewH2Transporter(ctx context.Context) (gost.Transporter, error) {
 
 type chainedClosable []io.Closer
 
-// Close implements Closable.
+// Close implements io.Closer.Close().
 func (cc chainedClosable) Close() error {
 	for _, c := range cc {
 		_ = c.Close()
