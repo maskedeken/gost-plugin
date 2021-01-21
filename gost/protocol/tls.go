@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 
 	"github.com/maskedeken/gost-plugin/args"
@@ -13,6 +14,8 @@ import (
 
 var (
 	tlsSessionCache = tls.NewLRUClientSessionCache(128)
+
+	errNoCertSpecified = errors.New("No TLS cert specified")
 )
 
 // TLSListener is Listener which handles tls
@@ -71,6 +74,10 @@ func NewTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 
 func buildServerTLSConfig(ctx context.Context) (*tls.Config, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
+	if options.Cert == "" || options.Key == "" {
+		return nil, errNoCertSpecified
+	}
+
 	cert, err := tls.LoadX509KeyPair(options.Cert, options.Key)
 	if err != nil {
 		return nil, err

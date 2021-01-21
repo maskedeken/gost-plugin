@@ -97,6 +97,10 @@ func NewXTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 
 func buildServerXTLSConfig(ctx context.Context) (*xtls.Config, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
+	if options.Cert == "" || options.Key == "" {
+		return nil, errNoCertSpecified
+	}
+
 	cert, err := xtls.LoadX509KeyPair(options.Cert, options.Key)
 	if err != nil {
 		return nil, err
