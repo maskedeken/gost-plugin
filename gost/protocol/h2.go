@@ -14,6 +14,7 @@ import (
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
+	"github.com/maskedeken/gost-plugin/log"
 	"github.com/maskedeken/gost-plugin/registry"
 	"golang.org/x/net/http2"
 )
@@ -51,7 +52,13 @@ func (l *H2Listener) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	remoteAddr, _ := net.ResolveTCPAddr("tcp", r.RemoteAddr)
 	conn := newHttpConnection(r.Body, w, r.Body, l.addr, remoteAddr)
 
-	l.connChan <- conn
+	select {
+	case l.connChan <- conn:
+	default:
+		log.Warnln("connection queue is full")
+		conn.Close()
+	}
+
 	<-conn.Done()
 }
 
