@@ -120,6 +120,11 @@ func buildClientXTLSConfig(ctx context.Context) *xtls.Config {
 	}
 	if options.ServerName != "" {
 		xtlsConfig.ServerName = options.ServerName
+	} else {
+		if net.ParseIP(options.RemoteAddr) == nil {
+			// if remoteAddr is domain
+			xtlsConfig.ServerName = options.RemoteAddr
+		}
 	}
 
 	return xtlsConfig

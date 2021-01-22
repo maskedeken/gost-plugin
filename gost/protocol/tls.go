@@ -97,6 +97,12 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 	}
 	if options.ServerName != "" {
 		tlsConfig.ServerName = options.ServerName
+	} else {
+		ip := net.ParseIP(options.RemoteAddr)
+		if ip == nil {
+			// if remoteAddr is domain
+			tlsConfig.ServerName = options.RemoteAddr
+		}
 	}
 
 	return tlsConfig
