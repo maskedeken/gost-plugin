@@ -105,7 +105,14 @@ func NewQUICListener(ctx context.Context) (gost.Listener, error) {
 	}
 
 	options := ctx.Value(C.OPTIONS).(*args.Options)
-	ln, err := quic.ListenAddr(options.GetLocalAddr(), tlsConfig, quicConfig)
+	lAddrStr := options.GetLocalAddr()
+	lAddr, _ := net.ResolveUDPAddr("udp", lAddrStr)
+	pConn, err := ListenPacket(ctx, lAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	ln, err := quic.Listen(pConn, tlsConfig, quicConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +170,14 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 		MaxIdleTimeout:     time.Second * 30,
 	}
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
-	session, err := quic.DialAddr(options.GetRemoteAddr(), tlsConfig, quicConfig)
+	udpAddrStr := options.GetRemoteAddr()
+	udpAddr, _ := net.ResolveUDPAddr("udp", udpAddrStr)
+	pConn, err := ListenPacket(t.ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := quic.Dial(pConn, udpAddr, udpAddrStr, tlsConfig, quicConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,8 @@ import (
 
 	"github.com/maskedeken/gost-plugin/args"
 	"github.com/maskedeken/gost-plugin/log"
-	"github.com/maskedeken/gost-plugin/utils"
+
+	_ "github.com/maskedeken/gost-plugin/utils"
 )
 
 var (
@@ -20,7 +21,6 @@ var (
 
 var (
 	options = args.Options{}
-	vpn     bool
 )
 
 func init() {
@@ -52,7 +52,8 @@ func main() {
 	flags.BoolVar(&options.Insecure, "insecure", false, "(client) Allow insecure TLS connections.")
 	flags.UintVar(&options.Mux, "mux", 1, "(client) MUX sessions per Websocket connection.")
 	flags.UintVar(&options.LogLevel, "logLevel", 3, "Log level (0:Panic, 1:Fatal, 2:Error, 3:Warn, 4:Info, 5:Debug, 6:Trace).")
-	flags.BoolVar(&vpn, "V", false, "Run in VPN mode.")
+	flags.BoolVar(&options.Vpn, "V", false, "Run in VPN mode.")
+	flags.BoolVar(&options.FastOpen, "fast-open", false, "Enable TCP fast open.")
 
 	flags.Parse(os.Args[1:])
 	if *version {
@@ -71,10 +72,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init context: %s", err)
 		os.Exit(23)
-	}
-
-	if vpn {
-		utils.RegisterControlFunc()
 	}
 
 	handler, err := newHandler(ctx)

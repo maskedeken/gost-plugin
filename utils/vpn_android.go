@@ -67,21 +67,26 @@ set_timeout(int sock)
 import "C"
 
 import (
-	"net"
+	"context"
+	"fmt"
 	"syscall"
 
+	"github.com/maskedeken/gost-plugin/args"
+	"github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/log"
+	"github.com/maskedeken/gost-plugin/registry"
 )
 
-func ControlOnConnSetup(network string, address string, c syscall.RawConn) error {
-	fn := func(s uintptr) {
+func ControlOnConnSetup(ctx context.Context, network string, address string, s uintptr) error {
+	options := ctx.Value(constant.OPTIONS).(*args.Options)
+	if options.Vpn {
 		fd := int(s)
 		path := "protect_path"
 
 		socket, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 		if err != nil {
 			log.Errorln(err)
-			return
+			return err
 		}
 
 		defer syscall.Close(socket)
@@ -91,7 +96,7 @@ func ControlOnConnSetup(network string, address string, c syscall.RawConn) error
 		err = syscall.Connect(socket, &syscall.SockaddrUnix{Name: path})
 		if err != nil {
 			log.Errorln(err)
-			return
+			return err
 		}
 
 		C.ancil_send_fd(C.int(socket), C.int(fd))
@@ -100,28 +105,17 @@ func ControlOnConnSetup(network string, address string, c syscall.RawConn) error
 		n, err := syscall.Read(socket, dummy)
 		if err != nil {
 			log.Errorln(err)
-			return
+			return err
 		}
 		if n != 1 {
-			log.Errorf("Failed to protect fd: ", fd)
-			return
+			return fmt.Errorf("Failed to protect fd: %d", fd)
 		}
-	}
-
-	if err := c.Control(fn); err != nil {
-		return err
 	}
 
 	return nil
 }
 
-func RegisterControlFunc() {
-	net.ListenUDPListenConfigHook = func(c *net.ListenConfig) {
-		log.Debugf("DialContextDialerHook %v", c)
-		c.Control = ControlOnConnSetup
-	}
-	net.DialContextDialerHook = func(d *net.Dialer) {
-		log.Debugf("DialContextDialerHook %v", d)
-		d.Control = ControlOnConnSetup
-	}
+func init() {
+	registry.RegisterDialController(ControlOnConnSetup)
+	registry.RegisterListenController(ControlOnConnSetup)
 }

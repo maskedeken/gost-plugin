@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
@@ -53,8 +54,9 @@ func (l *TCPListener) Serve(ctx context.Context) error {
 // NewTCPListener is constructor for TCPListener
 func NewTCPListener(ctx context.Context) (gost.Listener, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
-	lAddr := options.GetLocalAddr()
-	ln, err := net.Listen("tcp", lAddr)
+	lAddrStr := options.GetLocalAddr()
+	lAddr, _ := net.ResolveTCPAddr("tcp", lAddrStr)
+	ln, err := Listen(ctx, lAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +77,14 @@ type TCPTransporter struct {
 // DialConn implements gost.Transporter.DialConn()
 func (t *TCPTransporter) DialConn() (net.Conn, error) {
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
-	return net.Dial("tcp", options.GetRemoteAddr())
+	dialer := &net.Dialer{
+		Timeout:   time.Second * 16,
+		DualStack: true,
+		LocalAddr: nil,
+	}
+	dialer.Control = registry.GetDialControl(t.ctx)
+
+	return dialer.Dial("tcp", options.GetRemoteAddr())
 }
 
 // NewTCPTransporter is constructor for TCPTransporter
@@ -86,6 +95,16 @@ func NewTCPTransporter(ctx context.Context) (gost.Transporter, error) {
 func init() {
 	registry.RegisterListener("tcp", NewTCPListener)
 	registry.RegisterTransporter("tcp", NewTCPTransporter)
+}
+
+func Listen(ctx context.Context, srcAddr net.Addr) (net.Listener, error) {
+	if srcAddr == nil {
+		srcAddr = &net.TCPAddr{IP: net.IPv4zero, Port: 0}
+	}
+
+	var lc net.ListenConfig
+	lc.Control = registry.GetListenControl(ctx)
+	return lc.Listen(ctx, srcAddr.Network(), srcAddr.String())
 }
 
 func keepAccepting(ctx context.Context, listener net.Listener, connChan chan net.Conn) {

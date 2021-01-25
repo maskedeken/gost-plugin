@@ -29,6 +29,8 @@ type Options struct {
 	Mux        uint
 	LogLevel   uint
 	XTLSShow   bool
+	Vpn        bool
+	FastOpen   bool
 }
 
 func (o *Options) GetLocalAddr() string {
@@ -167,6 +169,13 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 			}
 		}
 
+		if _, b := args.Get("fastOpen"); b {
+			options.FastOpen = true
+		}
+
+		if _, b := args.Get("__android_vpn"); b {
+			options.Vpn = true
+		}
 	}
 
 	ctx = context.WithValue(ctx, C.OPTIONS, options)
