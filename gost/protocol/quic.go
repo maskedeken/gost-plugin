@@ -94,7 +94,7 @@ func NewQUICListener(ctx context.Context) (gost.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig.NextProtos = []string{C.QUIC_ALPN}
+	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 
 	quicConfig := &quic.Config{
 		ConnectionIDLength:    12,
@@ -163,7 +163,7 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 	}
 
 	tlsConfig := buildClientTLSConfig(t.ctx)
-	tlsConfig.NextProtos = []string{C.QUIC_ALPN}
+	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 	quicConfig := &quic.Config{
 		ConnectionIDLength: 12,
 		HandshakeTimeout:   time.Second * 8,
