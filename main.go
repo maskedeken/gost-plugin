@@ -12,7 +12,7 @@ import (
 	"github.com/maskedeken/gost-plugin/args"
 	"github.com/maskedeken/gost-plugin/log"
 
-	_ "github.com/maskedeken/gost-plugin/utils"
+	_ "github.com/maskedeken/gost-plugin/hook"
 )
 
 var (

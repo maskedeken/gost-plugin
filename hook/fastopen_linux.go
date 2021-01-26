@@ -1,6 +1,6 @@
 // +build linux
 
-package utils
+package hook
 
 import (
 	"context"

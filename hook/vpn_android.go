@@ -1,6 +1,6 @@
 // +build android
 
-package utils
+package hook
 
 /*
 #include <stdlib.h>
