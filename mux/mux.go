@@ -21,7 +21,7 @@ func generateMuxID() muxID {
 
 type muxSession struct {
 	id             muxID
-	client         *smux.Session
+	client         client
 	underlayConn   net.Conn
 	lastActiveTime time.Time
 }
@@ -36,7 +36,7 @@ type MuxPool struct {
 
 func (p *MuxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
 	openNewStream := func(sess *muxSession) (net.Conn, error) {
-		rwc, err := sess.client.OpenStream()
+		rwc, err := sess.client.OpenNewStream()
 		sess.lastActiveTime = time.Now()
 		if err != nil {
 			sess.underlayConn.Close()
@@ -73,7 +73,7 @@ func (p *MuxPool) DialMux(newConn func() (net.Conn, error)) (net.Conn, error) {
 		return nil, err
 	}
 
-	sess := &muxSession{id: id, client: client, underlayConn: conn}
+	sess := &muxSession{id: id, client: &smuxClient{client}, underlayConn: conn}
 	p.sessions[id] = sess
 	return openNewStream(sess)
 }
