@@ -1,0 +1,10 @@
+syntax = "proto3";
+option go_package = "github.com/maskedeken/gost-plugin/gost/protocol";
+
+message Hunk {
+  bytes data = 1;
+}
+
+service GunService {
+  rpc Tun (stream Hunk) returns (stream Hunk);
+}
