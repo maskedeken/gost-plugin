@@ -91,7 +91,12 @@ func (t *GunTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	return newGunConnection(tun, nil, nil), nil
+	var remote net.Addr
+	pr, ok := peer.FromContext(tun.Context())
+	if ok {
+		remote = pr.Addr
+	}
+	return newGunConnection(tun, nil, remote), nil
 }
 
 // NewGunTransporter is the constructor for GunTransporter
