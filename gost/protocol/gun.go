@@ -13,6 +13,7 @@ import (
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 type GunListener struct {
@@ -38,7 +39,12 @@ func (l *GunListener) Serve(ctx context.Context) error {
 
 // Tun implements GunServiceServer.Tun()
 func (l *GunListener) Tun(srv GunService_TunServer) error {
-	conn := newGunConnection(srv)
+	var remote net.Addr
+	pr, ok := peer.FromContext(srv.Context())
+	if ok {
+		remote = pr.Addr
+	}
+	conn := newGunConnection(srv, l.listener.Addr(), remote)
 
 	select {
 	case l.connChan <- conn:
@@ -85,7 +91,7 @@ func (t *GunTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	return newGunConnection(tun), nil
+	return newGunConnection(tun, nil, nil), nil
 }
 
 // NewGunTransporter is the constructor for GunTransporter
@@ -136,13 +142,30 @@ type gunService interface {
 
 type gunConnection struct {
 	gunService
-	rb   []byte
-	done chan struct{}
+	local  net.Addr
+	remote net.Addr
+	rb     []byte
+	done   chan struct{}
 }
 
-func newGunConnection(service gunService) *gunConnection {
+func newGunConnection(service gunService, local net.Addr, remote net.Addr) *gunConnection {
+	if local == nil {
+		local = &net.TCPAddr{
+			IP:   []byte{0, 0, 0, 0},
+			Port: 0,
+		}
+	}
+
+	if remote == nil {
+		remote = &net.TCPAddr{
+			IP:   []byte{0, 0, 0, 0},
+			Port: 0,
+		}
+	}
 	return &gunConnection{
 		gunService: service,
+		local:      local,
+		remote:     remote,
 		done:       make(chan struct{}),
 	}
 }
@@ -181,12 +204,12 @@ func (c *gunConnection) Close() error {
 
 // LocalAddr implements net.Conn.LocalAddr().
 func (c *gunConnection) LocalAddr() net.Addr {
-	return nil
+	return c.local
 }
 
 // RemoteAddr implements net.Conn.RemoteAddr().
 func (c *gunConnection) RemoteAddr() net.Addr {
-	return nil
+	return c.remote
 }
 
 // SetDeadline implements net.Conn.SetDeadline().
