@@ -1,3 +1,6 @@
+// Credit to: https://github.com/Qv2ray/gun
+// Licensed under MIT.
+
 package protocol
 
 import (
