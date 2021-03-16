@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"net"
 	"net/http"
 
@@ -32,7 +33,15 @@ func (l *MWSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go serveMux(websocketServerConn(conn), l.connChan)
+	var ed []byte
+	if str := r.Header.Get("Sec-WebSocket-Protocol"); str != "" {
+		if ed, err = base64.StdEncoding.DecodeString(str); err != nil {
+			log.Errorf("failed to decode the early payload: %s", err)
+			return
+		}
+	}
+
+	go serveMux(websocketServerConn(conn, ed), l.connChan)
 }
 
 // NewMWSListener is constructor for MWSListener

@@ -54,6 +54,7 @@ func main() {
 	flags.UintVar(&options.LogLevel, "logLevel", 3, "Log level (0:Panic, 1:Fatal, 2:Error, 3:Warn, 4:Info, 5:Debug, 6:Trace).")
 	flags.BoolVar(&options.Vpn, "V", false, "Run in VPN mode.")
 	flags.BoolVar(&options.FastOpen, "fast-open", false, "Enable TCP fast open.")
+	flags.UintVar(&options.Ed, "ed", 0, "(client) Length of early data for WebSocket. WebSocket 0-RTT is enabled if ed > 0.")
 
 	flags.Parse(os.Args[1:])
 	if *version {

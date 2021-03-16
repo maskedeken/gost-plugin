@@ -3,6 +3,8 @@ package protocol
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -45,14 +47,23 @@ func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var err error
 	conn, err := l.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("failed to upgrade to websocket: %s", err)
 		return
 	}
 
+	var ed []byte
+	if str := r.Header.Get("Sec-WebSocket-Protocol"); str != "" {
+		if ed, err = base64.StdEncoding.DecodeString(str); err != nil {
+			log.Errorf("failed to decode the early payload: %s", err)
+			return
+		}
+	}
+
 	select {
-	case l.connChan <- websocketServerConn(conn):
+	case l.connChan <- websocketServerConn(conn, ed):
 	default:
 		log.Warnln("connection queue is full")
 		conn.Close()
@@ -125,12 +136,7 @@ type WSTransporter struct {
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *WSTransporter) DialConn() (net.Conn, error) {
-	conn, err := t.TCPTransporter.DialConn()
-	if err != nil {
-		return nil, err
-	}
-
-	wsConn, err := websocketClientConn(t.ctx, conn)
+	wsConn, err := dialWS(t.ctx, t.TCPTransporter.DialConn)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +161,7 @@ type WSSTransporter struct {
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *WSSTransporter) DialConn() (net.Conn, error) {
-	conn, err := t.TLSTransporter.DialConn()
-	if err != nil {
-		return nil, err
-	}
-
-	wsConn, err := websocketClientConn(t.ctx, conn)
+	wsConn, err := dialWS(t.ctx, t.TLSTransporter.DialConn)
 	if err != nil {
 		return nil, err
 	}
@@ -178,23 +179,91 @@ func NewWSSTransporter(ctx context.Context) (gost.Transporter, error) {
 	return &WSSTransporter{inner.(*TLSTransporter)}, nil
 }
 
+func dialWS(ctx context.Context, newConn func() (net.Conn, error)) (net.Conn, error) {
+	options := ctx.Value(C.OPTIONS).(*args.Options)
+	rAddr := options.GetRemoteAddr()
+	ed := options.Ed
+	url := "ws://" + rAddr + options.Path
+
+	if ed > 0 {
+		return &delayDialConn{
+			ctx:     ctx,
+			url:     url,
+			newConn: newConn,
+			ed:      ed,
+			dialed:  make(chan struct{}),
+		}, nil
+	}
+
+	return websocketClientConn(ctx, url, newConn, nil)
+}
+
+type delayDialConn struct {
+	net.Conn
+	ctx     context.Context
+	url     string
+	newConn func() (net.Conn, error)
+	ed      uint
+	dialed  chan struct{}
+	closed  bool
+}
+
+func (d *delayDialConn) Write(b []byte) (int, error) {
+	if d.closed {
+		return 0, io.ErrClosedPipe
+	}
+
+	if d.Conn == nil {
+		ed := b
+		if len(ed) > int(d.ed) {
+			ed = nil
+		}
+		var err error
+		if d.Conn, err = websocketClientConn(d.ctx, d.url, d.newConn, ed); err != nil {
+			d.Close()
+			return 0, err
+		}
+		close(d.dialed)
+		if ed != nil {
+			return len(ed), nil
+		}
+	}
+
+	return d.Conn.Write(b)
+}
+
+func (d *delayDialConn) Read(b []byte) (int, error) {
+	<-d.dialed
+
+	if d.closed {
+		return 0, io.ErrClosedPipe
+	}
+
+	return d.Conn.Read(b)
+}
+
+func (d *delayDialConn) Close() error {
+	d.closed = true
+	if d.Conn == nil {
+		return nil
+	}
+	return d.Conn.Close()
+}
+
 type websocketConn struct {
 	conn *websocket.Conn
 	rb   []byte
 }
 
-func websocketClientConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
+func websocketClientConn(ctx context.Context, url string, newConn func() (net.Conn, error), ed []byte) (net.Conn, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
-	rAddr := options.GetRemoteAddr()
-	url := "ws://" + rAddr + options.Path
-
 	dialer := websocket.Dialer{
 		ReadBufferSize:    4 * 1024,
 		WriteBufferSize:   4 * 1024,
 		HandshakeTimeout:  time.Second * 30,
 		EnableCompression: !options.Nocomp,
 		NetDial: func(net, addr string) (net.Conn, error) {
-			return conn, nil
+			return newConn()
 		},
 	}
 
@@ -203,6 +272,11 @@ func websocketClientConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
 	if options.Hostname != "" {
 		header.Set("Host", options.Hostname)
 	}
+
+	if ed != nil {
+		header.Set("Sec-WebSocket-Protocol", base64.StdEncoding.EncodeToString(ed))
+	}
+
 	c, resp, err := dialer.Dial(url, header)
 	if err != nil {
 		return nil, err
@@ -211,10 +285,11 @@ func websocketClientConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
 	return &websocketConn{conn: c}, nil
 }
 
-func websocketServerConn(conn *websocket.Conn) net.Conn {
+func websocketServerConn(conn *websocket.Conn, ed []byte) net.Conn {
 	// conn.EnableWriteCompression(true)
 	return &websocketConn{
 		conn: conn,
+		rb:   ed,
 	}
 }
 

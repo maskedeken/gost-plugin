@@ -31,6 +31,7 @@ type Options struct {
 	XTLSShow   bool
 	Vpn        bool
 	FastOpen   bool
+	Ed         uint
 }
 
 func (o *Options) GetLocalAddr() string {
