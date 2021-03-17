@@ -41,8 +41,8 @@ func main() {
 	flags.UintVar(&options.LocalPort, "localPort", 1984, "local port to listen on.")
 	flags.StringVar(&options.RemoteAddr, "remoteAddr", "127.0.0.1", "remote address to forward.")
 	flags.UintVar(&options.RemotePort, "remotePort", 1080, "remote port to forward.")
-	flags.StringVar(&options.Path, "path", "/", "URL path for websocket.")
-	flags.StringVar(&options.Hostname, "host", "", "(client) Host header for websocket.")
+	flags.StringVar(&options.Path, "path", "/", "URL path for websocket/h2.")
+	flags.StringVar(&options.Hostname, "host", "", "(client) Host header for websocket/h2.")
 	flags.StringVar(&options.ServerName, "serverName", "", "(client) Server name for server.")
 	flags.StringVar(&options.Cert, "cert", "", "(server) Path to TLS certificate file.")
 	flags.StringVar(&options.Key, "key", "", "(server) Path to TLS key file.")
@@ -55,6 +55,7 @@ func main() {
 	flags.BoolVar(&options.Vpn, "V", false, "Run in VPN mode.")
 	flags.BoolVar(&options.FastOpen, "fast-open", false, "Enable TCP fast open.")
 	flags.UintVar(&options.Ed, "ed", 0, "(client) Length of early data for WebSocket. WebSocket 0-RTT is enabled if ed > 0.")
+	flags.StringVar(&options.ServiceName, "serviceName", "GunService", "Service name for gRPC.")
 
 	flags.Parse(os.Args[1:])
 	if *version {

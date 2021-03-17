@@ -42,12 +42,7 @@ func (l *GunListener) Serve(ctx context.Context) error {
 
 // Tun implements GunServiceServer.Tun()
 func (l *GunListener) Tun(srv GunService_TunServer) error {
-	var remote net.Addr
-	pr, ok := peer.FromContext(srv.Context())
-	if ok {
-		remote = pr.Addr
-	}
-	conn := newGunConnection(srv, l.listener.Addr(), remote)
+	conn := newGunConnection(srv, l.listener.Addr())
 
 	select {
 	case l.connChan <- conn:
@@ -72,34 +67,33 @@ func NewGunListener(ctx context.Context) (gost.Listener, error) {
 		return nil, err
 	}
 
+	options := ctx.Value(C.OPTIONS).(*args.Options)
 	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	l := &GunListener{
 		TCPListener: inner.(*TCPListener),
 		server:      server,
 	}
-	RegisterGunServiceServer(server, l)
+
+	desc := ServerDesc(options.ServiceName)
+	server.RegisterService(&desc, l)
 	return l, nil
 }
 
 type GunTransporter struct {
 	*TCPTransporter
-	client GunServiceClient
+	client *gunServiceClient
 }
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *GunTransporter) DialConn() (net.Conn, error) {
 	// connect rpc
-	tun, err := t.client.Tun(context.Background())
+	options := t.ctx.Value(C.OPTIONS).(*args.Options)
+	tun, err := t.client.TunCustomName(context.Background(), options.ServiceName)
 	if err != nil {
 		return nil, err
 	}
 
-	var remote net.Addr
-	pr, ok := peer.FromContext(tun.Context())
-	if ok {
-		remote = pr.Addr
-	}
-	return newGunConnection(tun, nil, remote), nil
+	return newGunConnection(tun, nil), nil
 }
 
 // NewGunTransporter is the constructor for GunTransporter
@@ -136,7 +130,7 @@ func NewGunTransporter(ctx context.Context) (gost.Transporter, error) {
 		return nil, err
 	}
 
-	client := NewGunServiceClient(conn)
+	client := &gunServiceClient{conn}
 	return &GunTransporter{
 		TCPTransporter: inner.(*TCPTransporter),
 		client:         client,
@@ -144,6 +138,7 @@ func NewGunTransporter(ctx context.Context) (gost.Transporter, error) {
 }
 
 type gunService interface {
+	Context() context.Context
 	Send(*Hunk) error
 	Recv() (*Hunk, error)
 }
@@ -156,7 +151,18 @@ type gunConnection struct {
 	done   chan struct{}
 }
 
-func newGunConnection(service gunService, local net.Addr, remote net.Addr) *gunConnection {
+func newGunConnection(service gunService, local net.Addr) *gunConnection {
+	var remote net.Addr
+	pr, ok := peer.FromContext(service.Context())
+	if ok {
+		remote = pr.Addr
+	} else {
+		remote = &net.TCPAddr{
+			IP:   []byte{0, 0, 0, 0},
+			Port: 0,
+		}
+	}
+
 	if local == nil {
 		local = &net.TCPAddr{
 			IP:   []byte{0, 0, 0, 0},
@@ -164,12 +170,6 @@ func newGunConnection(service gunService, local net.Addr, remote net.Addr) *gunC
 		}
 	}
 
-	if remote == nil {
-		remote = &net.TCPAddr{
-			IP:   []byte{0, 0, 0, 0},
-			Port: 0,
-		}
-	}
 	return &gunConnection{
 		gunService: service,
 		local:      local,
@@ -237,6 +237,32 @@ func (c *gunConnection) SetWriteDeadline(t time.Time) error {
 
 func (c *gunConnection) Done() <-chan struct{} {
 	return c.done
+}
+
+func ServerDesc(name string) grpc.ServiceDesc {
+	return grpc.ServiceDesc{
+		ServiceName: name,
+		HandlerType: (*GunServiceServer)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "Tun",
+				Handler:       _GunService_Tun_Handler,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+		},
+		Metadata: "gost/protocol/gun.proto",
+	}
+}
+
+func (c *gunServiceClient) TunCustomName(ctx context.Context, name string, opts ...grpc.CallOption) (GunService_TunClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ServerDesc(name).Streams[0], "/"+name+"/Tun", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &gunServiceTunClient{stream}
+	return x, nil
 }
 
 func init() {

@@ -13,25 +13,26 @@ import (
 )
 
 type Options struct {
-	LocalAddr  string
-	LocalPort  uint
-	RemoteAddr string
-	RemotePort uint
-	Hostname   string
-	Mode       string
-	Path       string
-	ServerName string
-	Server     bool
-	Nocomp     bool
-	Insecure   bool
-	Cert       string
-	Key        string
-	Mux        uint
-	LogLevel   uint
-	XTLSShow   bool
-	Vpn        bool
-	FastOpen   bool
-	Ed         uint
+	LocalAddr   string
+	LocalPort   uint
+	RemoteAddr  string
+	RemotePort  uint
+	Hostname    string
+	Mode        string
+	Path        string
+	ServerName  string
+	Server      bool
+	Nocomp      bool
+	Insecure    bool
+	Cert        string
+	Key         string
+	Mux         uint
+	LogLevel    uint
+	XTLSShow    bool
+	Vpn         bool
+	FastOpen    bool
+	Ed          uint
+	ServiceName string
 }
 
 func (o *Options) GetLocalAddr() string {
