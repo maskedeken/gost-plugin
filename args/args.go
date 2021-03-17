@@ -171,12 +171,34 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 			}
 		}
 
+		if c, b := args.Get("logLevel"); b {
+			logLevel, err := strconv.ParseUint(c, 10, 32)
+			if err != nil {
+				return ctx, err
+			}
+
+			options.LogLevel = uint(logLevel)
+		}
+
 		if _, b := args.Get("fastOpen"); b {
 			options.FastOpen = true
 		}
 
 		if _, b := args.Get("__android_vpn"); b {
 			options.Vpn = true
+		}
+
+		if c, b := args.Get("ed"); b {
+			ed, err := strconv.ParseUint(c, 10, 32)
+			if err != nil {
+				return ctx, err
+			}
+
+			options.Ed = uint(ed)
+		}
+
+		if c, b := args.Get("serviceName"); b {
+			options.ServiceName = c
 		}
 	}
 
