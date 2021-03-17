@@ -58,7 +58,6 @@ func (l *WSListener) Upgrade(w http.ResponseWriter, r *http.Request) {
 	if str := r.Header.Get("Sec-WebSocket-Protocol"); str != "" {
 		if ed, err = base64.StdEncoding.DecodeString(str); err != nil {
 			log.Errorf("failed to decode the early payload: %s", err)
-			return
 		}
 	}
 
