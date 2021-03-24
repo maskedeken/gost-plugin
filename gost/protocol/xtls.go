@@ -28,6 +28,7 @@ func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 		xConn.RPRX = true
 		xConn.SHOW = l.xtlsShow
 		xConn.MARK = "XTLS"
+		xConn.DirectMode = true
 	}
 	return conn, nil
 }
@@ -76,6 +77,7 @@ func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 	xConn.RPRX = true
 	xConn.SHOW = t.xtlsShow
 	xConn.MARK = "XTLS"
+	xConn.DirectMode = true
 	return xConn, nil
 }
 

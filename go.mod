@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.0
-	github.com/lucas-clemente/quic-go v0.19.3
+	github.com/lucas-clemente/quic-go v0.20.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/xtaci/smux v1.5.15
