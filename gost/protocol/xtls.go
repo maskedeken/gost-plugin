@@ -2,11 +2,14 @@ package protocol
 
 import (
 	"context"
+	"io"
 	"net"
+	"syscall"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
+	"github.com/maskedeken/gost-plugin/gost/readv"
 	"github.com/maskedeken/gost-plugin/registry"
 	xtls "github.com/xtls/go"
 )
@@ -25,10 +28,16 @@ type XTLSListener struct {
 func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 	conn := <-l.connChan
 	if xConn, ok := conn.(*xtls.Conn); ok {
+		var rawConn syscall.RawConn
+		if sc, ok := xConn.Connection.(syscall.Conn); ok {
+			rawConn, _ = sc.SyscallConn()
+		}
+
 		xConn.RPRX = true
+		xConn.DirectMode = true
 		xConn.SHOW = l.xtlsShow
 		xConn.MARK = "XTLS"
-		xConn.DirectMode = true
+		conn = newReadVConn(xConn, rawConn)
 	}
 	return conn, nil
 }
@@ -74,11 +83,16 @@ func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
+	var rawConn syscall.RawConn
+	if sc, ok := xConn.Connection.(syscall.Conn); ok {
+		rawConn, _ = sc.SyscallConn()
+	}
+
 	xConn.RPRX = true
+	xConn.DirectMode = true
 	xConn.SHOW = t.xtlsShow
 	xConn.MARK = "XTLS"
-	xConn.DirectMode = true
-	return xConn, nil
+	return newReadVConn(xConn, rawConn), nil
 }
 
 // NewXTLSTransporter is the constructor for XTLSTransporter
@@ -128,6 +142,41 @@ func buildClientXTLSConfig(ctx context.Context) *xtls.Config {
 	}
 
 	return xtlsConfig
+}
+
+type readVConn struct {
+	*xtls.Conn
+	rawConn syscall.RawConn
+}
+
+func (c *readVConn) Read(b []byte) (int, error) {
+	if c.rawConn != nil && c.DirectIn {
+		var nBytes int
+		var err error
+		err = c.rawConn.Read(func(fd uintptr) (done bool) {
+			nBytes = readv.Read(fd, b)
+			return nBytes > -1
+		})
+
+		if err != nil {
+			return 0, err
+		}
+
+		if nBytes == 0 {
+			return 0, io.EOF
+		}
+
+		return nBytes, err
+	}
+
+	return c.Conn.Read(b)
+}
+
+func newReadVConn(xConn *xtls.Conn, rawConn syscall.RawConn) net.Conn {
+	return &readVConn{
+		Conn:    xConn,
+		rawConn: rawConn,
+	}
 }
 
 func init() {
