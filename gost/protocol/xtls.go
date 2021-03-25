@@ -172,6 +172,10 @@ func (c *readVConn) Read(b []byte) (int, error) {
 	return c.Conn.Read(b)
 }
 
+func (c *readVConn) GetXTLSConn() *xtls.Conn {
+	return c.Conn
+}
+
 func newReadVConn(xConn *xtls.Conn, rawConn syscall.RawConn) net.Conn {
 	return &readVConn{
 		Conn:    xConn,
