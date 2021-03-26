@@ -85,11 +85,12 @@ func copyConn(dst io.Writer, src io.Reader) (n int64, err error) {
 		var nn int64
 		for {
 			if xc.DirectIn {
-				nn, err = tc.ReadFrom(xc.Connection) // splice
-			} else {
-				nn, err = io.CopyN(dst, src, defaultReadSize)
+				nn, err = io.Copy(tc, xc.Connection) // splice
+				n += nn
+				return
 			}
 
+			nn, err = io.CopyN(dst, src, defaultReadSize)
 			n += nn
 			if err != nil {
 				return
