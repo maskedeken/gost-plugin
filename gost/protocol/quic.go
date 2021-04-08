@@ -98,8 +98,7 @@ func NewQUICListener(ctx context.Context) (gost.Listener, error) {
 
 	quicConfig := &quic.Config{
 		ConnectionIDLength:    12,
-		HandshakeIdleTimeout:  time.Second * 8,
-		MaxIdleTimeout:        time.Second * 45,
+		KeepAlive:             true,
 		MaxIncomingStreams:    32,
 		MaxIncomingUniStreams: -1,
 	}
@@ -165,9 +164,8 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 	tlsConfig := buildClientTLSConfig(t.ctx)
 	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 	quicConfig := &quic.Config{
-		ConnectionIDLength:   12,
-		HandshakeIdleTimeout: time.Second * 8,
-		MaxIdleTimeout:       time.Second * 30,
+		ConnectionIDLength: 12,
+		KeepAlive:          true,
 	}
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
 	udpAddrStr := options.GetRemoteAddr()
