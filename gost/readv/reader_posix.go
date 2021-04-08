@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-func Read(fd uintptr, buf []byte) int {
+func ReadRaw(fd uintptr, buf []byte) int {
 	size := len(buf)
 	if size <= 0 {
 		return 0

@@ -1,4 +1,4 @@
-package protocol
+package proxy
 
 import (
 	"context"
@@ -30,24 +30,24 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 
 // TCPListener is Listener which handles tcp
 type TCPListener struct {
-	listener net.Listener
-	connChan chan net.Conn
+	Listener net.Listener
+	ConnChan chan net.Conn
 }
 
 // Close implements gost.Listener.Close()
 func (l *TCPListener) Close() error {
-	return l.listener.Close()
+	return l.Listener.Close()
 }
 
 // AcceptConn implements gost.Listener.AcceptConn()
 func (l *TCPListener) AcceptConn() (conn net.Conn, err error) {
-	conn = <-l.connChan
+	conn = <-l.ConnChan
 	return
 }
 
 // Serve implements gost.Listener.Serve()
 func (l *TCPListener) Serve(ctx context.Context) error {
-	keepAccepting(ctx, l.listener, l.connChan)
+	KeepAccepting(ctx, l.Listener, l.ConnChan)
 	return nil
 }
 
@@ -62,8 +62,8 @@ func NewTCPListener(ctx context.Context) (gost.Listener, error) {
 	}
 
 	l := &TCPListener{
-		listener: &tcpKeepAliveListener{ln.(*net.TCPListener)},
-		connChan: make(chan net.Conn, 1024),
+		Listener: &tcpKeepAliveListener{ln.(*net.TCPListener)},
+		ConnChan: make(chan net.Conn, 1024),
 	}
 
 	return l, nil
@@ -71,18 +71,18 @@ func NewTCPListener(ctx context.Context) (gost.Listener, error) {
 
 // TCPTransporter is Listener which handles tcp
 type TCPTransporter struct {
-	ctx context.Context
+	Context context.Context
 }
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *TCPTransporter) DialConn() (net.Conn, error) {
-	options := t.ctx.Value(C.OPTIONS).(*args.Options)
+	options := t.Context.Value(C.OPTIONS).(*args.Options)
 	dialer := &net.Dialer{
 		Timeout:   time.Second * 16,
 		DualStack: true,
 		LocalAddr: nil,
 	}
-	dialer.Control = registry.GetDialControl(t.ctx)
+	dialer.Control = registry.GetDialControl(t.Context)
 
 	return dialer.Dial("tcp", options.GetRemoteAddr())
 }
@@ -107,7 +107,7 @@ func Listen(ctx context.Context, srcAddr net.Addr) (net.Listener, error) {
 	return lc.Listen(ctx, srcAddr.Network(), srcAddr.String())
 }
 
-func keepAccepting(ctx context.Context, listener net.Listener, connChan chan net.Conn) {
+func KeepAccepting(ctx context.Context, listener net.Listener, connChan chan net.Conn) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -135,7 +135,7 @@ func keepAccepting(ctx context.Context, listener net.Listener, connChan chan net
 	}
 }
 
-func keepMuxAccepting(ctx context.Context, listener net.Listener, connChan chan net.Conn) {
+func KeepMuxAccepting(ctx context.Context, listener net.Listener, connChan chan net.Conn) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -154,11 +154,11 @@ func keepMuxAccepting(ctx context.Context, listener net.Listener, connChan chan 
 			}
 		}
 
-		go serveMux(conn, connChan)
+		go ServeMux(conn, connChan)
 	}
 }
 
-func serveMux(conn net.Conn, connChan chan net.Conn) {
+func ServeMux(conn net.Conn, connChan chan net.Conn) {
 	smuxConfig := smux.DefaultConfig()
 	session, err := smux.Server(conn, smuxConfig)
 	if err != nil {

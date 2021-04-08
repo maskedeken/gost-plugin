@@ -5,13 +5,13 @@ import (
 	"io"
 	"net"
 
+	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/registry"
 	xtls "github.com/xtls/go"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
-	"github.com/maskedeken/gost-plugin/gost/protocol"
 	"github.com/maskedeken/gost-plugin/log"
 )
 
@@ -121,7 +121,7 @@ func newHandler(ctx context.Context) (*handler, error) {
 			return nil, err
 		}
 
-		transporter, err = protocol.NewTCPTransporter(ctx)
+		transporter, err = proxy.NewTCPTransporter(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -139,11 +139,10 @@ func newHandler(ctx context.Context) (*handler, error) {
 			return nil, err
 		}
 
-		listener, err = protocol.NewTCPListener(ctx)
+		listener, err = proxy.NewTCPListener(ctx)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return &handler{
