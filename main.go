@@ -12,6 +12,8 @@ import (
 	"github.com/maskedeken/gost-plugin/args"
 	"github.com/maskedeken/gost-plugin/log"
 
+	_ "github.com/maskedeken/gost-plugin/gost/proxy/client"
+	_ "github.com/maskedeken/gost-plugin/gost/proxy/server"
 	_ "github.com/maskedeken/gost-plugin/hook"
 )
 

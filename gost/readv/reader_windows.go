@@ -6,7 +6,7 @@ import (
 	"syscall"
 )
 
-func Read(fd uintptr, buf []byte) (n int) {
+func ReadRaw(fd uintptr, buf []byte) (n int) {
 	size := uint32(len(buf))
 	if size <= 0 {
 		return
