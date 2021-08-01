@@ -49,7 +49,21 @@ func buildServerTLSConfig(ctx context.Context) (*tls.Config, error) {
 		return nil, err
 	}
 
-	return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
+        tlsConfig := &tls.Config{
+        }
+
+        tlsConfig.CurvePreferences = []tls.CurveID{29}
+        tlsConfig.MinVersion = tls.VersionTLS13
+        tlsConfig.CipherSuites = []uint16{
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	}
+	tlsConfig.Certificates = []tls.Certificate{cert}
+
+	return tlsConfig, nil
 }
 
 func init() {

@@ -52,10 +52,16 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 
 	tlsConfig := &tls.Config{
 		ClientSessionCache:     tlsSessionCache,
-		NextProtos:             []string{"http/1.1"},
 		InsecureSkipVerify:     options.Insecure,
 		SessionTicketsDisabled: true,
 	}
+
+	tlsConfig.CurvePreferences = []tls.CurveID{29}
+	tlsConfig.MinVersion = tls.VersionTLS13
+	tlsConfig.CipherSuites = []uint16{
+		tls.TLS_CHACHA20_POLY1305_SHA256,
+	}
+
 	if options.ServerName != "" {
 		tlsConfig.ServerName = options.ServerName
 	} else {
