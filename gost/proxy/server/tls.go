@@ -5,11 +5,15 @@ import (
 	"crypto/tls"
 	"errors"
 
+        "crypto/x509"
+        "io/ioutil"
+
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/registry"
+	"github.com/maskedeken/gost-plugin/log"
 )
 
 var (
@@ -62,6 +66,17 @@ func buildServerTLSConfig(ctx context.Context) (*tls.Config, error) {
 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 	}
 	tlsConfig.Certificates = []tls.Certificate{cert}
+	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+
+	var rootCAs *x509.CertPool =  x509.NewCertPool()
+        certPEMBlock, err := ioutil.ReadFile(options.Ca)
+        if err != nil {
+                log.Fatalf("main: ReadFile ca [%s], %v", options.Ca, err)
+        }
+        if ok := rootCAs.AppendCertsFromPEM(certPEMBlock); !ok {
+                log.Fatalf("main: AppendCertsFromPEM failed, ca is invalid")
+        }
+        tlsConfig.ClientCAs = rootCAs
 
 	return tlsConfig, nil
 }

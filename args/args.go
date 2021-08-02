@@ -24,6 +24,7 @@ type Options struct {
 	Server      bool
 	Nocomp      bool
 	Insecure    bool
+	Ca	    string
 	Cert        string
 	Key         string
 	Mux         uint
@@ -120,6 +121,9 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 		if c, b := args.Get("path"); b {
 			options.Path = c
 		}
+                if c, b := args.Get("ca"); b {
+                        options.Ca = c
+                }
 		if c, b := args.Get("cert"); b {
 			options.Cert = c
 		}

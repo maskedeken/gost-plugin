@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"errors"
+	"crypto/x509"
+	"io/ioutil"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/registry"
+	"github.com/maskedeken/gost-plugin/log"
 )
 
 var (
@@ -50,12 +54,21 @@ func NewTLSTransporter(ctx context.Context) (gost.Transporter, error) {
 func buildClientTLSConfig(ctx context.Context) *tls.Config {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
 
-	tlsConfig := &tls.Config{
-		ClientSessionCache:     tlsSessionCache,
-		InsecureSkipVerify:     options.Insecure,
-		SessionTicketsDisabled: true,
+	if options.Cert == "" || options.Key == "" {
+		log.Errorf("TLS cert: %s", errors.New("No TLS cert specified"))	
 	}
 
+	cert, err := tls.LoadX509KeyPair(options.Cert, options.Key)
+	if err != nil {
+		log.Errorf("LoadX509KeyPair failed: %s", err)	
+	}
+
+	tlsConfig := &tls.Config{
+		ClientSessionCache:     tlsSessionCache,
+		SessionTicketsDisabled: true,
+	}
+	
+	//TLS1.3,X25519,CHACHA20
 	tlsConfig.CurvePreferences = []tls.CurveID{29}
 	tlsConfig.MinVersion = tls.VersionTLS13
 	tlsConfig.CipherSuites = []uint16{
@@ -71,6 +84,20 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 			tlsConfig.ServerName = options.RemoteAddr
 		}
 	}
+
+	tlsConfig.Certificates = []tls.Certificate{cert}
+
+	//rootCA
+	var rootCAs *x509.CertPool =  x509.NewCertPool()
+	certPEMBlock, err := ioutil.ReadFile(options.Ca)
+	if err != nil {
+		log.Fatalf("main: ReadFile ca [%s], %v", options.Ca, err)
+	}
+	if ok := rootCAs.AppendCertsFromPEM(certPEMBlock); !ok {
+		log.Fatalf("main: AppendCertsFromPEM failed, ca is invalid")
+	}
+	
+	tlsConfig.RootCAs = rootCAs
 
 	return tlsConfig
 }

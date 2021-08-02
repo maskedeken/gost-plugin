@@ -46,6 +46,7 @@ func main() {
 	flags.StringVar(&options.Path, "path", "/", "URL path for websocket/h2.")
 	flags.StringVar(&options.Hostname, "host", "", "(client) Host header for websocket/h2.")
 	flags.StringVar(&options.ServerName, "serverName", "", "(client) Server name for server.")
+	flags.StringVar(&options.Ca, "ca", "", "CA TLS certificate file.")
 	flags.StringVar(&options.Cert, "cert", "", "(server) Path to TLS certificate file.")
 	flags.StringVar(&options.Key, "key", "", "(server) Path to TLS key file.")
 	flags.StringVar(&options.Mode, "mode", "ws", "Transport mode = tls, xtls, mtls, ws, wss, mws, mwss, h2, quic, grpc.\nSpecially xtls mode should work only if shadowsocks cipher is set to NONE.")
