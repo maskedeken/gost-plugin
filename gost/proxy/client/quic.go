@@ -20,7 +20,7 @@ import (
 type QUICTransporter struct {
 	access  sync.Mutex
 	ctx     context.Context
-	session quic.Session
+	session quic.Connection
 }
 
 func (t *QUICTransporter) openStream() (net.Conn, error) {
@@ -54,7 +54,7 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 	quicConfig := &quic.Config{
 		ConnectionIDLength: 12,
-		KeepAlive:          true,
+		KeepAlivePeriod:    0,
 	}
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
 	udpAddrStr := options.GetRemoteAddr()

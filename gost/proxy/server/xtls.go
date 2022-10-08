@@ -25,7 +25,7 @@ func (l *XTLSListener) AcceptConn() (net.Conn, error) {
 	conn := <-l.ConnChan
 	if xConn, ok := conn.(*xtls.Conn); ok {
 		var rawConn syscall.RawConn
-		if sc, ok := xConn.Connection.(syscall.Conn); ok {
+		if sc, ok := xConn.NetConn().(syscall.Conn); ok {
 			rawConn, _ = sc.SyscallConn()
 		}
 

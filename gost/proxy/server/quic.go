@@ -21,7 +21,7 @@ type QUICListener struct {
 	connChan chan net.Conn
 }
 
-func (l *QUICListener) acceptStreams(session quic.Session) {
+func (l *QUICListener) acceptStreams(session quic.Connection) {
 	defer session.CloseWithError(0, "")
 
 	for {
@@ -93,7 +93,7 @@ func NewQUICListener(ctx context.Context) (gost.Listener, error) {
 
 	quicConfig := &quic.Config{
 		ConnectionIDLength:    12,
-		KeepAlive:             true,
+		KeepAlivePeriod:       0,
 		MaxIncomingStreams:    32,
 		MaxIncomingUniStreams: -1,
 	}

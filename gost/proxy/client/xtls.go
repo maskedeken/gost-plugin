@@ -38,7 +38,7 @@ func (t *XTLSTransporter) DialConn() (net.Conn, error) {
 	}
 
 	var rawConn syscall.RawConn
-	if sc, ok := xConn.Connection.(syscall.Conn); ok {
+	if sc, ok := xConn.NetConn().(syscall.Conn); ok {
 		rawConn, _ = sc.SyscallConn()
 	}
 
