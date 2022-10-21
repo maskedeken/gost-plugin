@@ -4,17 +4,26 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"strings"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/registry"
+
+	"github.com/maskedeken/gost-plugin/log"
+	utls "github.com/refraction-networking/utls"
 )
 
 var (
 	tlsSessionCache = tls.NewLRUClientSessionCache(128)
 )
+
+type tlsConn interface {
+	net.Conn
+	Handshake() error
+}
 
 // TLSTransporter is Transporter which handles tls
 type TLSTransporter struct {
@@ -28,7 +37,7 @@ func (t *TLSTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	tlsConn := tls.Client(conn, buildClientTLSConfig(t.Context))
+	tlsConn := newClientTLSConn(t.Context, conn)
 	err = tlsConn.Handshake()
 	if err != nil {
 		return nil, err
@@ -67,6 +76,42 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 	}
 
 	return tlsConfig
+}
+
+func newClientTLSConn(ctx context.Context, underlyConn net.Conn) tlsConn {
+	tlsConfig := buildClientTLSConfig(ctx)
+	options := ctx.Value(C.OPTIONS).(*args.Options)
+	if options.Fingerprint == "" {
+		return tls.Client(underlyConn, tlsConfig)
+	}
+
+	// use utls
+	var helloID utls.ClientHelloID = utls.HelloChrome_Auto
+	switch strings.ToLower(options.Fingerprint) {
+	case "chrome":
+		helloID = utls.HelloChrome_Auto
+	case "ios":
+		helloID = utls.HelloIOS_Auto
+	case "firefox":
+		helloID = utls.HelloFirefox_Auto
+	case "edge":
+		helloID = utls.HelloEdge_Auto
+	case "safari":
+		helloID = utls.HelloSafari_Auto
+	case "360browser":
+		helloID = utls.Hello360_Auto
+	case "qqbrowser":
+		helloID = utls.HelloQQ_Auto
+	default:
+		log.Warnln("Fingerprint is invalid. Use Chrome by default.")
+	}
+
+	return utls.UClient(underlyConn, &utls.Config{
+		NextProtos:             tlsConfig.NextProtos,
+		InsecureSkipVerify:     tlsConfig.InsecureSkipVerify,
+		SessionTicketsDisabled: tlsConfig.SessionTicketsDisabled,
+		ServerName:             tlsConfig.ServerName,
+	}, helloID)
 }
 
 func init() {

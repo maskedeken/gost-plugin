@@ -33,6 +33,7 @@ type Options struct {
 	FastOpen    bool
 	Ed          uint
 	ServiceName string
+	Fingerprint string
 }
 
 func (o *Options) GetLocalAddr() string {
@@ -199,6 +200,10 @@ func ApplyOptions(ctx context.Context, options *Options) (context.Context, error
 
 		if c, b := args.Get("serviceName"); b {
 			options.ServiceName = c
+		}
+
+		if c, b := args.Get("fingerprint"); b {
+			options.Fingerprint = c
 		}
 	}
 

@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/lucas-clemente/quic-go v0.29.1
+	github.com/refraction-networking/utls v1.1.5
 	github.com/sirupsen/logrus v1.9.0
 	github.com/xtaci/smux v1.5.15
 	github.com/xtls/go v0.0.0-20220914232946-0441cf4cf837
@@ -15,10 +16,12 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-19 v0.1.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect

@@ -58,6 +58,7 @@ func main() {
 	flags.BoolVar(&options.FastOpen, "fast-open", false, "Enable TCP fast open.")
 	flags.UintVar(&options.Ed, "ed", 0, "(client) Length of early data for WebSocket. WebSocket 0-RTT is enabled if ed > 0.")
 	flags.StringVar(&options.ServiceName, "serviceName", "GunService", "Service name for gRPC.")
+	flags.StringVar(&options.Fingerprint, "fingerprint", "", "(client) Fingerprint for TLS. Should be one of chrome, firefox, safari, edge, ios, 360browser, qqbrowser.")
 
 	flags.Parse(os.Args[1:])
 	if *version {
