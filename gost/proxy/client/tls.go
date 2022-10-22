@@ -23,6 +23,23 @@ var (
 type tlsConn interface {
 	net.Conn
 	Handshake() error
+	NegotiatedProtocol() string
+}
+
+type gotlsConnWrapper struct {
+	*tls.Conn
+}
+
+func (c *gotlsConnWrapper) NegotiatedProtocol() string {
+	return c.ConnectionState().NegotiatedProtocol
+}
+
+type utlsConnWrapper struct {
+	*utls.UConn
+}
+
+func (c *utlsConnWrapper) NegotiatedProtocol() string {
+	return c.ConnectionState().NegotiatedProtocol
 }
 
 // TLSTransporter is Transporter which handles tls
@@ -37,7 +54,9 @@ func (t *TLSTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	tlsConn := newClientTLSConn(t.Context, conn)
+	options := t.Context.Value(C.OPTIONS).(*args.Options)
+	tlsConfig := buildClientTLSConfig(t.Context)
+	tlsConn := newClientTLSConn(conn, tlsConfig, options.Fingerprint)
 	err = tlsConn.Handshake()
 	if err != nil {
 		return nil, err
@@ -78,16 +97,14 @@ func buildClientTLSConfig(ctx context.Context) *tls.Config {
 	return tlsConfig
 }
 
-func newClientTLSConn(ctx context.Context, underlyConn net.Conn) tlsConn {
-	tlsConfig := buildClientTLSConfig(ctx)
-	options := ctx.Value(C.OPTIONS).(*args.Options)
-	if options.Fingerprint == "" {
-		return tls.Client(underlyConn, tlsConfig)
+func newClientTLSConn(underlyConn net.Conn, tlsConfig *tls.Config, fingerprint string) tlsConn {
+	if fingerprint == "" {
+		return &gotlsConnWrapper{tls.Client(underlyConn, tlsConfig)}
 	}
 
 	// use utls
 	var helloID utls.ClientHelloID = utls.HelloChrome_Auto
-	switch strings.ToLower(options.Fingerprint) {
+	switch strings.ToLower(fingerprint) {
 	case "chrome":
 		helloID = utls.HelloChrome_Auto
 	case "ios":
@@ -106,12 +123,13 @@ func newClientTLSConn(ctx context.Context, underlyConn net.Conn) tlsConn {
 		log.Warnln("Fingerprint is invalid. Use Chrome by default.")
 	}
 
-	return utls.UClient(underlyConn, &utls.Config{
+	uConn := utls.UClient(underlyConn, &utls.Config{
 		NextProtos:             tlsConfig.NextProtos,
 		InsecureSkipVerify:     tlsConfig.InsecureSkipVerify,
 		SessionTicketsDisabled: tlsConfig.SessionTicketsDisabled,
 		ServerName:             tlsConfig.ServerName,
 	}, helloID)
+	return &utlsConnWrapper{uConn}
 }
 
 func init() {

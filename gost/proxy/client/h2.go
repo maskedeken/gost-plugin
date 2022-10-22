@@ -70,6 +70,7 @@ func NewH2Transporter(ctx context.Context) (gost.Transporter, error) {
 
 	tlsConfig := buildClientTLSConfig(ctx)
 	tlsConfig.NextProtos = []string{"h2"}
+	options := ctx.Value(C.OPTIONS).(*args.Options)
 	transport := &http2.Transport{
 		DialTLS: func(network string, addr string, tlsConfig *tls.Config) (net.Conn, error) {
 			pconn, err := inner.DialConn()
@@ -77,17 +78,16 @@ func NewH2Transporter(ctx context.Context) (gost.Transporter, error) {
 				return nil, err
 			}
 
-			cn := tls.Client(pconn, tlsConfig)
+			cn := newClientTLSConn(pconn, tlsConfig, options.Fingerprint)
 			if err := cn.Handshake(); err != nil {
 				return nil, err
 			}
-			state := cn.ConnectionState()
-			if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
+
+			p := cn.NegotiatedProtocol()
+			if p != http2.NextProtoTLS {
 				return nil, errors.New("http2: unexpected ALPN protocol " + p + "; want " + http2.NextProtoTLS)
 			}
-			if !state.NegotiatedProtocolIsMutual {
-				return nil, errors.New("http2: could not negotiate protocol mutually")
-			}
+
 			return cn, nil
 		},
 		TLSClientConfig: tlsConfig,
