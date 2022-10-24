@@ -24,6 +24,7 @@ type tlsConn interface {
 	net.Conn
 	Handshake() error
 	NegotiatedProtocol() string
+	AuthType() string
 }
 
 type gotlsConnWrapper struct {
@@ -34,12 +35,20 @@ func (c *gotlsConnWrapper) NegotiatedProtocol() string {
 	return c.ConnectionState().NegotiatedProtocol
 }
 
+func (c *gotlsConnWrapper) AuthType() string {
+	return "tls"
+}
+
 type utlsConnWrapper struct {
 	*utls.UConn
 }
 
 func (c *utlsConnWrapper) NegotiatedProtocol() string {
 	return c.ConnectionState().NegotiatedProtocol
+}
+
+func (c *utlsConnWrapper) AuthType() string {
+	return "utls"
 }
 
 // TLSTransporter is Transporter which handles tls

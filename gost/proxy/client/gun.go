@@ -13,7 +13,6 @@ import (
 	"github.com/maskedeken/gost-plugin/registry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/credentials"
 )
 
 type GunTransporter struct {
@@ -44,7 +43,7 @@ func NewGunTransporter(ctx context.Context) (gost.Transporter, error) {
 
 	var dialOption grpc.DialOption
 	tlsConfig := buildClientTLSConfig(ctx)
-	dialOption = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
+	dialOption = grpc.WithTransportCredentials(NewGrpcTLS(tlsConfig, options.Fingerprint))
 
 	// dial
 	conn, err := grpc.Dial(
