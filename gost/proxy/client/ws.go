@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -24,12 +25,10 @@ type WSTransporter struct {
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *WSTransporter) DialConn() (net.Conn, error) {
-	conn, err := t.TCPTransporter.DialConn()
-	if err != nil {
-		return nil, err
-	}
-
-	wsConn, err := websocketClientConn(t.Context, conn)
+	options := t.Context.Value(C.OPTIONS).(*args.Options)
+	rAddr := options.GetRemoteAddr()
+	url := "wss://" + rAddr + options.Path
+	wsConn, err := websocketClientConn(t.Context, url, t.TCPTransporter)
 	if err != nil {
 		return nil, err
 	}
@@ -54,12 +53,10 @@ type WSSTransporter struct {
 
 // DialConn implements gost.Transporter.DialConn()
 func (t *WSSTransporter) DialConn() (net.Conn, error) {
-	conn, err := t.TLSTransporter.DialConn()
-	if err != nil {
-		return nil, err
-	}
-
-	wsConn, err := websocketClientConn(t.Context, conn)
+	options := t.Context.Value(C.OPTIONS).(*args.Options)
+	rAddr := options.GetRemoteAddr()
+	url := "wss://" + rAddr + options.Path
+	wsConn, err := websocketClientConn(t.Context, url, t.TLSTransporter)
 	if err != nil {
 		return nil, err
 	}
@@ -77,33 +74,31 @@ func NewWSSTransporter(ctx context.Context) (gost.Transporter, error) {
 	return &WSSTransporter{inner.(*TLSTransporter)}, nil
 }
 
-func websocketClientConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
+func websocketClientConn(ctx context.Context, url string, transporter gost.Transporter) (net.Conn, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
-	rAddr := options.GetRemoteAddr()
 	ed := options.Ed
-	url := "ws://" + rAddr + options.Path
 
 	if ed > 0 {
 		return &delayDialConn{
-			ctx:     ctx,
-			url:     url,
-			rawConn: conn,
-			ed:      ed,
-			dialed:  make(chan struct{}),
+			ctx:         ctx,
+			url:         url,
+			transporter: transporter,
+			ed:          ed,
+			dialed:      make(chan struct{}),
 		}, nil
 	}
 
-	return streamWebsocketConn(ctx, url, conn, nil)
+	return streamWebsocketConn(ctx, url, transporter, nil)
 }
 
 type delayDialConn struct {
 	net.Conn
-	rawConn net.Conn
-	ctx     context.Context
-	url     string
-	ed      uint
-	dialed  chan struct{}
-	closed  bool
+	transporter gost.Transporter
+	ctx         context.Context
+	url         string
+	ed          uint
+	dialed      chan struct{}
+	closed      bool
 }
 
 func (d *delayDialConn) Write(b []byte) (int, error) {
@@ -117,7 +112,7 @@ func (d *delayDialConn) Write(b []byte) (int, error) {
 			ed = nil
 		}
 		var err error
-		if d.Conn, err = streamWebsocketConn(d.ctx, d.url, d.rawConn, ed); err != nil {
+		if d.Conn, err = streamWebsocketConn(d.ctx, d.url, d.transporter, ed); err != nil {
 			d.Close()
 			return 0, err
 		}
@@ -147,19 +142,25 @@ func (d *delayDialConn) Close() error {
 		return d.Conn.Close()
 	}
 
-	return d.rawConn.Close()
+	return nil
 }
 
-func streamWebsocketConn(ctx context.Context, url string, rawConn net.Conn, ed []byte) (net.Conn, error) {
+func streamWebsocketConn(ctx context.Context, url string, transporter gost.Transporter, ed []byte) (net.Conn, error) {
 	options := ctx.Value(C.OPTIONS).(*args.Options)
 	dialer := websocket.Dialer{
 		ReadBufferSize:    4 * 1024,
 		WriteBufferSize:   4 * 1024,
-		HandshakeTimeout:  time.Second * 30,
+		HandshakeTimeout:  time.Second * 8,
 		EnableCompression: !options.Nocomp,
 		NetDial: func(net, addr string) (net.Conn, error) {
-			return rawConn, nil
+			return transporter.DialConn()
 		},
+	}
+
+	if strings.HasPrefix(url, "wss") {
+		dialer.NetDialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return transporter.DialConn()
+		}
 	}
 
 	header := http.Header{}

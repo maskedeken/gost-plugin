@@ -41,6 +41,35 @@ func (c *gotlsConnWrapper) AuthType() string {
 
 type utlsConnWrapper struct {
 	*utls.UConn
+	utlsConfig *utls.Config
+}
+
+func (c *utlsConnWrapper) Handshake() error {
+	// Build the handshake state. This will apply every variable of the TLS of the
+	// fingerprint in the UConn
+	if err := c.BuildHandshakeState(); err != nil {
+		return err
+	}
+
+	// Iterate over extensions and check for utls.ALPNExtension
+	hasALPNExtension := false
+	for _, extension := range c.Extensions {
+		if alpn, ok := extension.(*utls.ALPNExtension); ok {
+			hasALPNExtension = true
+			alpn.AlpnProtocols = c.utlsConfig.NextProtos
+			break
+		}
+	}
+	if !hasALPNExtension { // Append extension if doesn't exists
+		c.Extensions = append(c.Extensions, &utls.ALPNExtension{AlpnProtocols: c.utlsConfig.NextProtos})
+	}
+
+	// Rebuild the client hello and do the handshake
+	if err := c.BuildHandshakeState(); err != nil {
+		return err
+	}
+
+	return c.UConn.Handshake()
 }
 
 func (c *utlsConnWrapper) NegotiatedProtocol() string {
@@ -132,13 +161,17 @@ func newClientTLSConn(underlyConn net.Conn, tlsConfig *tls.Config, fingerprint s
 		log.Warnln("Fingerprint is invalid. Use Chrome by default.")
 	}
 
-	uConn := utls.UClient(underlyConn, &utls.Config{
+	utlsConfig := &utls.Config{
 		NextProtos:             tlsConfig.NextProtos,
 		InsecureSkipVerify:     tlsConfig.InsecureSkipVerify,
 		SessionTicketsDisabled: tlsConfig.SessionTicketsDisabled,
 		ServerName:             tlsConfig.ServerName,
-	}, helloID)
-	return &utlsConnWrapper{uConn}
+	}
+	uConn := utls.UClient(underlyConn, utlsConfig, helloID)
+	return &utlsConnWrapper{
+		UConn:      uConn,
+		utlsConfig: utlsConfig.Clone(),
+	}
 }
 
 func init() {

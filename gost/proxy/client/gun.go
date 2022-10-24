@@ -43,6 +43,7 @@ func NewGunTransporter(ctx context.Context) (gost.Transporter, error) {
 
 	var dialOption grpc.DialOption
 	tlsConfig := buildClientTLSConfig(ctx)
+	tlsConfig.NextProtos = []string{"h2"}
 	dialOption = grpc.WithTransportCredentials(NewGrpcTLS(tlsConfig, options.Fingerprint))
 
 	// dial
