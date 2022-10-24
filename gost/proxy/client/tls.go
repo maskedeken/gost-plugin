@@ -167,10 +167,10 @@ func newClientTLSConn(underlyConn net.Conn, tlsConfig *tls.Config, fingerprint s
 		SessionTicketsDisabled: tlsConfig.SessionTicketsDisabled,
 		ServerName:             tlsConfig.ServerName,
 	}
-	uConn := utls.UClient(underlyConn, utlsConfig, helloID)
+	uConn := utls.UClient(underlyConn, utlsConfig.Clone(), helloID)
 	return &utlsConnWrapper{
 		UConn:      uConn,
-		utlsConfig: utlsConfig.Clone(),
+		utlsConfig: utlsConfig,
 	}
 }
 
