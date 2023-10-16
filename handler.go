@@ -7,15 +7,12 @@ import (
 
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/registry"
-	xtls "github.com/xtls/go"
 
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
 	"github.com/maskedeken/gost-plugin/log"
 )
-
-var defaultReadSize int64 = 2048
 
 type handler struct {
 	listener    gost.Listener
@@ -53,7 +50,7 @@ func (h *handler) Serve(ctx context.Context) {
 
 				errChan := make(chan error, 2)
 				copy := func(a, b net.Conn) {
-					_, err := copyConn(a, b)
+					_, err := io.Copy(a, b)
 					errChan <- err
 					return
 				}
@@ -69,37 +66,6 @@ func (h *handler) Serve(ctx context.Context) {
 	}()
 
 	go h.listener.Serve(ctx)
-}
-
-func copyConn(dst io.Writer, src io.Reader) (n int64, err error) {
-	var xc *xtls.Conn
-	var tc *net.TCPConn
-	if conn, ok := src.(interface{ GetXTLSConn() *xtls.Conn }); ok {
-		xc = conn.GetXTLSConn()
-	}
-	if conn, ok := dst.(*net.TCPConn); ok {
-		tc = conn
-	}
-
-	if tc != nil && xc != nil {
-		var nn int64
-		for {
-			if xc.DirectIn {
-				nn, err = tc.ReadFrom(xc.NetConn()) // splice
-				n += nn
-				return
-			}
-
-			nn, err = io.CopyN(dst, src, defaultReadSize)
-			n += nn
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	n, err = io.Copy(dst, src)
-	return
 }
 
 func newHandler(ctx context.Context) (*handler, error) {
