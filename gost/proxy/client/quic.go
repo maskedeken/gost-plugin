@@ -51,7 +51,7 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 	}
 
 	tlsConfig := buildClientTLSConfig(t.ctx)
-	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
+	tlsConfig.NextProtos = []string{"h3"}
 	quicConfig := &quic.Config{
 		KeepAlivePeriod: 0,
 	}
