@@ -6,7 +6,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/lucas-clemente/quic-go"
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
@@ -14,6 +13,7 @@ import (
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/log"
 	"github.com/maskedeken/gost-plugin/registry"
+	"github.com/quic-go/quic-go"
 )
 
 // QUICTransporter is Transporter which handles quic protocol
@@ -53,8 +53,7 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 	tlsConfig := buildClientTLSConfig(t.ctx)
 	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 	quicConfig := &quic.Config{
-		ConnectionIDLength: 12,
-		KeepAlivePeriod:    0,
+		KeepAlivePeriod: 0,
 	}
 	options := t.ctx.Value(C.OPTIONS).(*args.Options)
 	udpAddrStr := options.GetRemoteAddr()
@@ -64,7 +63,7 @@ func (t *QUICTransporter) DialConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	session, err := quic.Dial(pConn, udpAddr, udpAddrStr, tlsConfig, quicConfig)
+	session, err := quic.Dial(context.Background(), pConn, udpAddr, tlsConfig, quicConfig)
 	if err != nil {
 		return nil, err
 	}

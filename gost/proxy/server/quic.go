@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 
-	"github.com/lucas-clemente/quic-go"
 	"github.com/maskedeken/gost-plugin/args"
 	C "github.com/maskedeken/gost-plugin/constant"
 	"github.com/maskedeken/gost-plugin/gost"
@@ -12,11 +11,12 @@ import (
 	"github.com/maskedeken/gost-plugin/gost/proxy"
 	"github.com/maskedeken/gost-plugin/log"
 	"github.com/maskedeken/gost-plugin/registry"
+	"github.com/quic-go/quic-go"
 )
 
 // QUICListener is Listener which handles quic protocol
 type QUICListener struct {
-	listener quic.Listener
+	listener *quic.Listener
 	ctx      context.Context
 	connChan chan net.Conn
 }
@@ -92,7 +92,6 @@ func NewQUICListener(ctx context.Context) (gost.Listener, error) {
 	tlsConfig.NextProtos = []string{"h2", "http/1.1"}
 
 	quicConfig := &quic.Config{
-		ConnectionIDLength:    12,
 		KeepAlivePeriod:       0,
 		MaxIncomingStreams:    32,
 		MaxIncomingUniStreams: -1,
