@@ -8,14 +8,13 @@
 
 See command line args for advanced usages.
 
-### Shadowsocks over TLS/Multiplex TLS/XTLS 
+### Shadowsocks over TLS/Multiplex TLS
 
 On your server
 
 ```sh
 ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=tls"
 ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=mtls"
-ss-server -c config.json -p 443 --plugin gost-plugin --plugin-opts "server;cert=cert.pem;key=key.pem;mode=xtls"
 ```
 
 On your client
@@ -23,10 +22,7 @@ On your client
 ```sh
 ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=mydomain.me;mode=tls"
 ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=mydomain.me;mode=mtls;mux=1"
-ss-local -c config.json -p 443 --plugin gost-plugin --plugin-opts "serverName=mydomain.me;mode=xtls"
 ```
-
-**Note: XTLS mode should work only if shadowsocks cipher is set to NONE.**
 
 ### Shadowsocks over Websocket/Multiplex Websocket (HTTP)
 
